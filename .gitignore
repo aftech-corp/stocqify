@@ -1,0 +1,30 @@
+# ── Database credentials ─────────────────────────────────────
+# Never commit real credentials. Use database.sample.php as the template.
+app/config/database.php
+
+# ── User uploaded files ───────────────────────────────────────
+# These are generated at runtime — not part of source code
+uploads/
+public/uploads/
+
+# ── Database dumps ────────────────────────────────────────────
+*.sql
+
+# ── Environment / secrets ─────────────────────────────────────
+.env
+.env.local
+*.env
+
+# ── OS / editor junk ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── PHP runtime ───────────────────────────────────────────────
+*.log
+/var/

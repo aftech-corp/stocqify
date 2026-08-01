@@ -1,0 +1,34 @@
+<?php
+// ============================================================
+// Database Configuration — SAMPLE FILE
+// Copy this file to database.php and fill in your credentials.
+// database.php is excluded from git to keep credentials private.
+// ============================================================
+
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'sme_management');
+define('DB_USER', 'root');       // change this for production
+define('DB_PASS', '');           // change this for production
+define('DB_CHARSET', 'utf8mb4');
+
+function getDB(): PDO {
+    static $pdo = null;
+    if ($pdo === null) {
+        $dsn = sprintf('mysql:host=%s;dbname=%s;charset=%s', DB_HOST, DB_NAME, DB_CHARSET);
+        $options = [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ];
+        try {
+            $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
+        } catch (PDOException $e) {
+            error_log('Database connection failed: ' . $e->getMessage());
+            die('<div style="font-family:sans-serif;padding:40px;text-align:center;color:#dc2626;">
+                <h2>Database Connection Error</h2>
+                <p>Could not connect to the database. Please check your XAMPP/WAMP MySQL service is running and database credentials in <code>app/config/database.php</code>.</p>
+            </div>');
+        }
+    }
+    return $pdo;
+}

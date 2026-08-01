@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(& \"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root sme_management -e \"UPDATE businesses SET currency='NLE' WHERE currency='SLE'; SELECT id, name, currency FROM businesses;\" 2>&1)",
+      "PowerShell(& \"C:\\\\xampp\\\\mysql\\\\bin\\\\mysql.exe\" -u root sme_management -e \"ALTER TABLE sales ADD COLUMN IF NOT EXISTS walkin_name VARCHAR\\(150\\) DEFAULT NULL AFTER customer_id;\" 2>&1)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\xampp\\\\htdocs\\\\SME\" -Hidden -Directory | Where-Object { $_.Name -eq \".claude\" }; Get-ChildItem -Path \"c:\\\\xampp\\\\htdocs\\\\SME\\\\modules\\\\reports\\\\\" -Name)"
+    ]
+  }
+}

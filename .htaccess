@@ -1,0 +1,122 @@
+Options -Indexes
+
+# ── Security Headers ─────────────────────────────────────────────────
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    Header unset X-Powered-By
+    Header always unset X-Powered-By
+</IfModule>
+
+# ── Block Sensitive File Types ────────────────────────────────────────
+<FilesMatch "\.(sql|log|env|bak|sh|ini|lock)$">
+    Require all denied
+</FilesMatch>
+
+# ── Rewrite Engine ────────────────────────────────────────────────────
+RewriteEngine On
+RewriteBase /SME/
+
+# Block direct access to app/ and database/ directories
+RewriteRule ^(app|database)(/|$) - [F,L]
+
+# ── Public / Auth Pages ───────────────────────────────────────────────
+RewriteRule ^login/?$ public/login.php [L,QSA]
+RewriteRule ^logout/?$ public/logout.php [L,QSA]
+RewriteRule ^dashboard/?$ public/dashboard.php [L,QSA]
+RewriteRule ^setup/?$ public/setup.php [L,QSA]
+RewriteRule ^reset-admin/?$ public/reset_admin.php [L,QSA]
+
+# ── Module Index Routes ───────────────────────────────────────────────
+RewriteRule ^alerts/?$ modules/alerts/index.php [L,QSA]
+RewriteRule ^customers/?$ modules/customers/index.php [L,QSA]
+RewriteRule ^products/?$ modules/products/index.php [L,QSA]
+RewriteRule ^sales/?$ modules/sales/index.php [L,QSA]
+RewriteRule ^services/?$ modules/services/index.php [L,QSA]
+RewriteRule ^service-orders/?$ modules/service_orders/index.php [L,QSA]
+RewriteRule ^debts/?$ modules/debts/index.php [L,QSA]
+RewriteRule ^payments/?$ modules/payments/index.php [L,QSA]
+RewriteRule ^expenses/?$ modules/expenses/index.php [L,QSA]
+RewriteRule ^income/?$ modules/income/index.php [L,QSA]
+RewriteRule ^profile/?$ modules/profile/index.php [L,QSA]
+RewriteRule ^support/?$ modules/support/index.php [L,QSA]
+
+# ── Module Sub-page Routes (Clean) ────────────────────────────────────
+# Customers
+RewriteRule ^customers/add/?$ modules/customers/add.php [L,QSA]
+RewriteRule ^customers/edit/?$ modules/customers/edit.php [L,QSA]
+RewriteRule ^customers/view/?$ modules/customers/view.php [L,QSA]
+
+# Products
+RewriteRule ^products/add/?$ modules/products/add.php [L,QSA]
+RewriteRule ^products/edit/?$ modules/products/edit.php [L,QSA]
+RewriteRule ^products/categories/?$ modules/products/categories.php [L,QSA]
+RewriteRule ^products/adjust/?$ modules/products/adjust.php [L,QSA]
+
+# Sales
+RewriteRule ^sales/add/?$ modules/sales/add.php [L,QSA]
+RewriteRule ^sales/edit/?$ modules/sales/edit.php [L,QSA]
+RewriteRule ^sales/view/?$ modules/sales/view.php [L,QSA]
+RewriteRule ^sales/invoice/?$ modules/sales/invoice.php [L,QSA]
+
+# Services
+RewriteRule ^services/add/?$ modules/services/add.php [L,QSA]
+RewriteRule ^services/edit/?$ modules/services/edit.php [L,QSA]
+
+# Service Orders
+RewriteRule ^service-orders/add/?$ modules/service_orders/add.php [L,QSA]
+RewriteRule ^service-orders/edit/?$ modules/service_orders/edit.php [L,QSA]
+RewriteRule ^service-orders/view/?$ modules/service_orders/view.php [L,QSA]
+RewriteRule ^service-orders/invoice/?$ modules/service_orders/invoice.php [L,QSA]
+
+# Debts
+RewriteRule ^debts/view/?$ modules/debts/view.php [L,QSA]
+RewriteRule ^debts/payment/?$ modules/debts/payment.php [L,QSA]
+
+# Expenses
+RewriteRule ^expenses/add/?$ modules/expenses/add.php [L,QSA]
+RewriteRule ^expenses/edit/?$ modules/expenses/edit.php [L,QSA]
+RewriteRule ^expenses/categories/?$ modules/expenses/categories.php [L,QSA]
+
+# Income
+RewriteRule ^income/add/?$ modules/income/add.php [L,QSA]
+RewriteRule ^income/edit/?$ modules/income/edit.php [L,QSA]
+
+# Support
+RewriteRule ^support/view/?$ modules/support/view.php [L,QSA]
+RewriteRule ^support/tickets/?$ modules/support/tickets.php [L,QSA]
+
+# Admin
+RewriteRule ^admin/users/?$ modules/admin/users.php [L,QSA]
+RewriteRule ^admin/businesses/?$ modules/admin/businesses.php [L,QSA]
+RewriteRule ^admin/settings/?$ modules/admin/settings.php [L,QSA]
+
+# Reports
+RewriteRule ^reports/sales/?$ modules/reports/sales.php [L,QSA]
+RewriteRule ^reports/inventory/?$ modules/reports/inventory.php [L,QSA]
+RewriteRule ^reports/financial/?$ modules/reports/financial.php [L,QSA]
+RewriteRule ^reports/debts/?$ modules/reports/debts.php [L,QSA]
+RewriteRule ^reports/payments/?$ modules/reports/payments.php [L,QSA]
+RewriteRule ^reports/customers/?$ modules/reports/customers.php [L,QSA]
+RewriteRule ^reports/service-revenue/?$ modules/reports/service_revenue.php [L,QSA]
+
+# ── .php Passthrough (for relative links resolved via <base> tag) ─────
+# These allow relative hrefs like "edit.php?id=5" to resolve correctly
+# when a page is accessed via its clean URL
+RewriteRule ^customers/([a-z_]+\.php)$ modules/customers/$1 [L,QSA]
+RewriteRule ^products/([a-z_]+\.php)$ modules/products/$1 [L,QSA]
+RewriteRule ^sales/([a-z_]+\.php)$ modules/sales/$1 [L,QSA]
+RewriteRule ^services/([a-z_]+\.php)$ modules/services/$1 [L,QSA]
+RewriteRule ^service-orders/([a-z_]+\.php)$ modules/service_orders/$1 [L,QSA]
+RewriteRule ^debts/([a-z_]+\.php)$ modules/debts/$1 [L,QSA]
+RewriteRule ^expenses/([a-z_]+\.php)$ modules/expenses/$1 [L,QSA]
+RewriteRule ^income/([a-z_]+\.php)$ modules/income/$1 [L,QSA]
+RewriteRule ^payments/([a-z_]+\.php)$ modules/payments/$1 [L,QSA]
+RewriteRule ^support/([a-z_]+\.php)$ modules/support/$1 [L,QSA]
+RewriteRule ^admin/([a-z_]+\.php)$ modules/admin/$1 [L,QSA]
+RewriteRule ^reports/([a-z_]+\.php)$ modules/reports/$1 [L,QSA]
+RewriteRule ^profile/([a-z_]+\.php)$ modules/profile/$1 [L,QSA]
+RewriteRule ^alerts/([a-z_]+\.php)$ modules/alerts/$1 [L,QSA]
