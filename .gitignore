@@ -15,6 +15,9 @@ public/uploads/
 .env.local
 *.env
 
+# ── Claude Code internal files ────────────────────────────
+.claude/
+
 # ── OS / editor junk ─────────────────────────────────────────
 .DS_Store
 Thumbs.db
