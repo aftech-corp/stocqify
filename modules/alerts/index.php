@@ -349,7 +349,7 @@ $cashOutQ = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE bus
 $cashOutQ->execute([$bizId]);
 $cashOut = (float)$cashOutQ->fetchColumn();
 $cashFlow = $cashIn - $cashOut;
-$alerts[] = ['type'=>$cashFlow>=0?'success':'danger','icon'=>'fa-money-bill-trend-up','title'=>'Cash Flow This Month','message'=>"Net cash flow this month: <strong>" . formatMoney($cashFlow) . "</strong>. Cash in: " . formatMoney($cashIn) . " | Cash out: " . formatMoney($cashOut) . ".",'action'=>['url'=>'../../modules/reports/financial.php','label'=>'View P&L']];
+$alerts[] = ['type'=>$cashFlow>=0?'success':'danger','icon'=>'fa-money-bill-trend-up','title'=>'Cash Flow This Month','message'=>"Net cash flow this month: <strong>" . formatMoney($cashFlow) . "</strong>. Cash in: " . formatMoney($cashIn) . " | Cash out: " . formatMoney($cashOut) . ".",'action'=>['url'=>url('reports/financial'),'label'=>'View P&L']];
 
 // Sort by severity
 usort($alerts, function($a,$b){

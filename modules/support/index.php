@@ -24,6 +24,9 @@ $db->exec("CREATE TABLE IF NOT EXISTS `support_tickets` (
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+// Allow unassigned users to submit tickets (business_id nullable)
+try { $db->exec("ALTER TABLE support_tickets MODIFY COLUMN business_id INT UNSIGNED NULL DEFAULT NULL"); } catch (\Exception $e) {}
+
 $db->exec("CREATE TABLE IF NOT EXISTS `support_replies` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `ticket_id` INT UNSIGNED NOT NULL,
@@ -49,23 +52,45 @@ if (isPost() && post('_action') === 'new') {
     if (empty($errors)) {
         $db->prepare("INSERT INTO support_tickets (business_id, user_id, subject, message, priority) VALUES (?,?,?,?,?)")
            ->execute([$bizId, $me['id'], $subject, $message, $priority]);
+        $newTicketId = (int)$db->lastInsertId();
+        // Notify all admins of the new ticket
+        notifyAdmins('support',
+            'New Support Ticket: ' . $subject,
+            'From: ' . $me['name'] . ' · Priority: ' . ucfirst($priority),
+            url('support/tickets') . '?action=view&id=' . $newTicketId
+        );
         flash('success', 'Support request submitted. Our team will respond shortly.');
         redirect(url('support'));
     }
 }
 
-// Mark tickets with new admin replies as seen when landing here
-$db->prepare("UPDATE support_tickets SET business_read=1 WHERE business_id=? AND business_read=0")
-   ->execute([$bizId]);
+// Mark tickets as seen — scope by business or by user for unassigned accounts
+if ($bizId) {
+    $db->prepare("UPDATE support_tickets SET business_read=1 WHERE business_id=? AND business_read=0")
+       ->execute([$bizId]);
+} else {
+    $db->prepare("UPDATE support_tickets SET business_read=1 WHERE business_id IS NULL AND user_id=? AND business_read=0")
+       ->execute([$me['id']]);
+}
 
-// Load this business's tickets
-$stmt = $db->prepare("SELECT t.*,
-    (SELECT COUNT(*) FROM support_replies r WHERE r.ticket_id=t.id) AS reply_count,
-    (SELECT COUNT(*) FROM support_replies r2 WHERE r2.ticket_id=t.id AND r2.is_admin_reply=1) AS admin_replies
-    FROM support_tickets t
-    WHERE t.business_id=?
-    ORDER BY t.updated_at DESC");
-$stmt->execute([$bizId]);
+// Load tickets — for unassigned users scope to their own tickets only
+if ($bizId) {
+    $stmt = $db->prepare("SELECT t.*,
+        (SELECT COUNT(*) FROM support_replies r WHERE r.ticket_id=t.id) AS reply_count,
+        (SELECT COUNT(*) FROM support_replies r2 WHERE r2.ticket_id=t.id AND r2.is_admin_reply=1) AS admin_replies
+        FROM support_tickets t
+        WHERE t.business_id=?
+        ORDER BY t.updated_at DESC");
+    $stmt->execute([$bizId]);
+} else {
+    $stmt = $db->prepare("SELECT t.*,
+        (SELECT COUNT(*) FROM support_replies r WHERE r.ticket_id=t.id) AS reply_count,
+        (SELECT COUNT(*) FROM support_replies r2 WHERE r2.ticket_id=t.id AND r2.is_admin_reply=1) AS admin_replies
+        FROM support_tickets t
+        WHERE t.business_id IS NULL AND t.user_id=?
+        ORDER BY t.updated_at DESC");
+    $stmt->execute([$me['id']]);
+}
 $tickets = $stmt->fetchAll();
 
 $priorityColors = [

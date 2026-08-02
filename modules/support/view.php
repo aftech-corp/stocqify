@@ -18,12 +18,22 @@ if (isAdmin()) {
         WHERE t.id=?");
     $stmt->execute([$id]);
 } else {
-    $stmt = $db->prepare("SELECT t.*, u.name AS submitter_name, b.name AS biz_name
-        FROM support_tickets t
-        LEFT JOIN users u ON u.id = t.user_id
-        LEFT JOIN businesses b ON b.id = t.business_id
-        WHERE t.id=? AND t.business_id=?");
-    $stmt->execute([$id, currentBusinessId()]);
+    $bizId = currentBusinessId();
+    if ($bizId) {
+        $stmt = $db->prepare("SELECT t.*, u.name AS submitter_name, b.name AS biz_name
+            FROM support_tickets t
+            LEFT JOIN users u ON u.id = t.user_id
+            LEFT JOIN businesses b ON b.id = t.business_id
+            WHERE t.id=? AND t.business_id=?");
+        $stmt->execute([$id, $bizId]);
+    } else {
+        $stmt = $db->prepare("SELECT t.*, u.name AS submitter_name, b.name AS biz_name
+            FROM support_tickets t
+            LEFT JOIN users u ON u.id = t.user_id
+            LEFT JOIN businesses b ON b.id = t.business_id
+            WHERE t.id=? AND t.business_id IS NULL AND t.user_id=?");
+        $stmt->execute([$id, $me['id']]);
+    }
 }
 $ticket = $stmt->fetch();
 if (!$ticket) { flash('error', 'Ticket not found.'); redirect(url('support')); }
@@ -59,10 +69,23 @@ if (isPost() && post('_action') === 'reply') {
         $isAdminReply = isAdmin() ? 1 : 0;
         $db->prepare("INSERT INTO support_replies (ticket_id, user_id, message, is_admin_reply) VALUES (?,?,?,?)")
            ->execute([$id, $me['id'], $msg, $isAdminReply]);
-        // Notify the other party
+        // Notify the other party and mark unread
         if ($isAdminReply) {
             $db->prepare("UPDATE support_tickets SET business_read=0, admin_read=1, updated_at=NOW() WHERE id=?")->execute([$id]);
+            // Notify the ticket submitter
+            createNotification(
+                (int)$ticket['user_id'], 'support',
+                'Support reply on: ' . $ticket['subject'],
+                'An admin has replied to your support ticket.',
+                url('support/view') . '?id=' . $id
+            );
         } else {
+            // Notify admins of user reply
+            notifyAdmins('support',
+                'New reply on ticket: ' . $ticket['subject'],
+                'From: ' . $me['name'],
+                url('support/tickets') . '?action=view&id=' . $id
+            );
             $db->prepare("UPDATE support_tickets SET admin_read=0, business_read=1, updated_at=NOW() WHERE id=?")->execute([$id]);
         }
         flash('success', 'Reply sent.');

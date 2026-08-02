@@ -15,6 +15,7 @@ if (preg_match('|/modules/([^/]+)/|', $__self, $__m)) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="<?= $__baseHref ?>">
     <title><?= h($pageTitle ?? 'Dashboard') ?> | <?= h(APP_NAME) ?></title>
+    <link rel="icon" type="image/png" href="<?= APP_LOGO ?>">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script>
@@ -22,8 +23,22 @@ if (preg_match('|/modules/([^/]+)/|', $__self, $__m)) {
             theme: {
                 extend: {
                     colors: {
-                        primary: { DEFAULT: '#1d4ed8', light: '#3b82f6', dark: '#1e3a8a' },
-                        accent:  { DEFAULT: '#f59e0b' },
+                        primary: { DEFAULT: '#1B3263', light: '#2952a3', dark: '#142552', 50: '#eef1f8' },
+                        accent:  { DEFAULT: '#C9A84C', dark: '#a8892e', light: '#dfc471' },
+                        // Override Tailwind blue → brand navy so bg-blue-xxx/text-blue-xxx match brand throughout
+                        blue: {
+                            50:  '#eef1f8',
+                            100: '#dce5f2',
+                            200: '#bacceb',
+                            300: '#8aaad9',
+                            400: '#5c88c9',
+                            500: '#2952a3',
+                            600: '#1B3263',
+                            700: '#142552',
+                            800: '#0e1f3f',
+                            900: '#091428',
+                            950: '#050e22',
+                        }
                     }
                 }
             }

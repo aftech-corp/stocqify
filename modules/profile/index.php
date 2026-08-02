@@ -125,10 +125,68 @@ if (isPost() && isset($_POST['remove_avatar'])) {
     $user = $stmt->fetch();
 }
 
+// ==================== UPDATE BUSINESS LOGO ====================
+if (isPost() && isset($_POST['update_biz_logo']) && !isAdmin() && !empty($user['business_id'])) {
+    verifyCsrf();
+    $bizId = (int)$user['business_id'];
+    if (!empty($_FILES['biz_logo']['tmp_name'])) {
+        $file    = $_FILES['biz_logo'];
+        $allowed = ['image/jpeg','image/png','image/webp','image/gif'];
+        $finfo   = new finfo(FILEINFO_MIME_TYPE);
+        $mime    = $finfo->file($file['tmp_name']);
+        if (!in_array($mime, $allowed)) {
+            $errors[] = 'Only JPG, PNG, WebP, or GIF images are allowed.';
+        } elseif ($file['size'] > 2 * 1024 * 1024) {
+            $errors[] = 'Logo image must be 2 MB or smaller.';
+        } else {
+            $ext     = ['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp','image/gif'=>'gif'][$mime];
+            $fname   = 'biz_' . $bizId . '_' . time() . '.' . $ext;
+            $dir     = dirname(__DIR__, 2) . '/uploads/businesses/';
+            if (!is_dir($dir)) @mkdir($dir, 0755, true);
+            // Remove old logo
+            $oldStmt = $db->prepare('SELECT logo FROM businesses WHERE id=?');
+            $oldStmt->execute([$bizId]);
+            $oldLogo = $oldStmt->fetchColumn();
+            if ($oldLogo) { $old = dirname(__DIR__, 2) . '/' . $oldLogo; if (is_file($old)) @unlink($old); }
+            if (move_uploaded_file($file['tmp_name'], $dir . $fname)) {
+                $db->prepare('UPDATE businesses SET logo=? WHERE id=?')
+                   ->execute(['uploads/businesses/' . $fname, $bizId]);
+                auditLog('update_logo', 'businesses', $bizId);
+                $success = 'Business logo updated successfully.';
+            } else {
+                $errors[] = 'Failed to save logo. Check folder permissions.';
+            }
+        }
+    } else {
+        $errors[] = 'No file selected.';
+    }
+}
+
+// ==================== REMOVE BUSINESS LOGO ====================
+if (isPost() && isset($_POST['remove_biz_logo']) && !isAdmin() && !empty($user['business_id'])) {
+    verifyCsrf();
+    $bizId = (int)$user['business_id'];
+    $oldStmt = $db->prepare('SELECT logo FROM businesses WHERE id=?');
+    $oldStmt->execute([$bizId]);
+    $oldLogo = $oldStmt->fetchColumn();
+    if ($oldLogo) { $old = dirname(__DIR__, 2) . '/' . $oldLogo; if (is_file($old)) @unlink($old); }
+    $db->prepare('UPDATE businesses SET logo=NULL WHERE id=?')->execute([$bizId]);
+    auditLog('remove_logo', 'businesses', $bizId);
+    $success = 'Business logo removed.';
+}
+
 // Recent activity
 $activityStmt = $db->prepare('SELECT action, module, created_at FROM audit_logs WHERE user_id=? ORDER BY created_at DESC LIMIT 10');
 $activityStmt->execute([$me['id']]);
 $activities = $activityStmt->fetchAll();
+
+// Fetch fresh business logo (in case it was just updated)
+$__bizLogoData = null;
+if (!isAdmin() && !empty($user['business_id'])) {
+    $__blStmt = $db->prepare('SELECT logo, name FROM businesses WHERE id=? LIMIT 1');
+    $__blStmt->execute([$user['business_id']]);
+    $__bizLogoData = $__blStmt->fetch();
+}
 
 $pageTitle = 'My Profile';
 include __DIR__ . '/../../app/includes/header.php';
@@ -260,6 +318,65 @@ $user = $stmt->fetch();
                 </form>
             </div>
 
+            <!-- Business Logo (business users only) -->
+            <?php if (!isAdmin() && !empty($user['business_id']) && $__bizLogoData): ?>
+            <?php
+            $__currentBizLogo = $__bizLogoData['logo'] ?? null;
+            $__bizLogoUrl2 = null;
+            if ($__currentBizLogo) {
+                $__bizLogoPath = dirname(__DIR__, 2) . '/' . $__currentBizLogo;
+                if (is_file($__bizLogoPath)) $__bizLogoUrl2 = SITE_URL . '/' . $__currentBizLogo;
+            }
+            ?>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h4 class="text-base font-semibold text-gray-800 mb-1">
+                    <i class="fa-solid fa-image mr-2 text-purple-500"></i>Business Logo
+                </h4>
+                <p class="text-sm text-gray-500 mb-5">Your business logo appears in the sidebar and on documents.</p>
+
+                <div class="flex items-center gap-5 mb-5">
+                    <!-- Current Logo Preview -->
+                    <div class="flex-shrink-0">
+                        <?php if ($__bizLogoUrl2): ?>
+                        <img src="<?= h($__bizLogoUrl2) ?>" alt="Business Logo"
+                             class="w-20 h-20 rounded-xl object-cover border-2 border-gray-200 shadow-sm" id="biz-logo-preview">
+                        <?php else: ?>
+                        <div class="w-20 h-20 rounded-xl bg-amber-50 border-2 border-amber-200 flex items-center justify-center" id="biz-logo-placeholder">
+                            <span class="text-amber-500 font-bold text-3xl"><?= strtoupper(substr($__bizLogoData['name'] ?? 'B', 0, 1)) ?></span>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    <div>
+                        <p class="text-sm font-semibold text-gray-700"><?= h($__bizLogoData['name'] ?? '') ?></p>
+                        <p class="text-xs text-gray-400 mt-0.5">Recommended: square image, at least 200×200 px, max 2 MB</p>
+                        <p class="text-xs text-gray-400">Formats: JPG, PNG, WebP, GIF</p>
+                    </div>
+                </div>
+
+                <!-- Upload Form -->
+                <form method="POST" enctype="multipart/form-data" class="flex flex-wrap gap-3">
+                    <input type="hidden" name="csrf_token"      value="<?= h(csrfToken()) ?>">
+                    <input type="hidden" name="update_biz_logo" value="1">
+                    <label class="cursor-pointer inline-flex items-center gap-2 bg-blue-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                        <i class="fa-solid fa-upload"></i>
+                        <?= $__bizLogoUrl2 ? 'Replace Logo' : 'Upload Logo' ?>
+                        <input type="file" name="biz_logo" accept="image/*" class="hidden"
+                               onchange="previewBizLogo(this); this.form.submit();">
+                    </label>
+                    <?php if ($__bizLogoUrl2): ?>
+                    <form method="POST" class="inline">
+                        <input type="hidden" name="csrf_token"     value="<?= h(csrfToken()) ?>">
+                        <input type="hidden" name="remove_biz_logo" value="1">
+                        <button type="submit" onclick="return confirm('Remove business logo?')"
+                                class="inline-flex items-center gap-2 border border-red-300 text-red-600 text-sm px-4 py-2 rounded-lg hover:bg-red-50">
+                            <i class="fa-solid fa-trash-can"></i> Remove Logo
+                        </button>
+                    </form>
+                    <?php endif; ?>
+                </form>
+            </div>
+            <?php endif; ?>
+
             <!-- Change Password -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                 <h4 class="text-base font-semibold text-gray-800 mb-4">
@@ -305,6 +422,24 @@ $user = $stmt->fetch();
 </div>
 
 <script>
+function previewBizLogo(input) {
+    if (!input.files || !input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const preview = document.getElementById('biz-logo-preview');
+        const placeholder = document.getElementById('biz-logo-placeholder');
+        if (preview) { preview.src = e.target.result; }
+        else if (placeholder) {
+            const img = document.createElement('img');
+            img.src = e.target.result;
+            img.className = 'w-20 h-20 rounded-xl object-cover border-2 border-gray-200 shadow-sm';
+            img.id = 'biz-logo-preview';
+            placeholder.replaceWith(img);
+        }
+    };
+    reader.readAsDataURL(input.files[0]);
+}
+
 function checkPwStrength(pw) {
     const bar = document.getElementById('pw-bar');
     const lbl = document.getElementById('pw-label');

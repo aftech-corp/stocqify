@@ -6,6 +6,14 @@
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 
+// Ensure new auth columns exist (safe no-op if already present)
+try {
+    $__db = getDB();
+    $__db->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS force_password_change TINYINT NOT NULL DEFAULT 0");
+    $__db->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at DATETIME DEFAULT NULL");
+    unset($__db);
+} catch (\Throwable $__e) { unset($__db, $__e); }
+
 // Start secure session
 if (session_status() === PHP_SESSION_NONE) {
     session_name(SESSION_NAME);
@@ -30,6 +38,20 @@ function requireLogin(): void {
         header('Location: ' . SITE_URL . '/login?redirect=' . urlencode($_SERVER['REQUEST_URI']));
         exit;
     }
+    // Redirect to password change if flagged (before any other page access)
+    if (!empty($_SESSION['force_password_change'])) {
+        header('Location: ' . SITE_URL . '/change-password');
+        exit;
+    }
+    // Non-admin users without a business assignment may only reach dashboard/auth pages
+    if (!isAdmin() && empty($_SESSION['business_id'])) {
+        $__f = $_SERVER['PHP_SELF'] ?? '';
+        // Allow: dashboard, logout, profile, force-change-password, support
+        if (!preg_match('#/(dashboard|logout|force_change_password|profile[/\\\\]index|support[/\\\\](?:index|view))\.php$#', $__f)) {
+            header('Location: ' . SITE_URL . '/dashboard');
+            exit;
+        }
+    }
     // Regenerate session ID every 30 minutes to prevent fixation
     if (!isset($_SESSION['last_regenerated']) || time() - $_SESSION['last_regenerated'] > 1800) {
         session_regenerate_id(true);
@@ -40,7 +62,8 @@ function requireLogin(): void {
 function login(string $email, string $password): array {
     $db = getDB();
     $stmt = $db->prepare('SELECT u.*, r.slug AS role_slug, r.name AS role_name, r.permissions,
-                                 b.name AS business_name, b.currency AS business_currency
+                                 b.name AS business_name, b.currency AS business_currency,
+                                 u.force_password_change
                           FROM users u
                           JOIN roles r ON r.id = u.role_id
                           LEFT JOIN businesses b ON b.id = u.business_id
@@ -63,8 +86,9 @@ function login(string $email, string $password): array {
     $_SESSION['business_id']      = $user['business_id'];
     $_SESSION['business_name']    = $user['business_name'] ?? APP_NAME;
     $_SESSION['business_currency']= $user['business_currency'] ?? CURRENCY;
-    $_SESSION['permissions']      = json_decode($user['permissions'] ?? '{}', true);
-    $_SESSION['last_regenerated'] = time();
+    $_SESSION['permissions']           = json_decode($user['permissions'] ?? '{}', true);
+    $_SESSION['force_password_change'] = !empty($user['force_password_change']);
+    $_SESSION['last_regenerated']      = time();
 
     // Update last login
     $db->prepare('UPDATE users SET last_login = NOW() WHERE id = ?')->execute([$user['id']]);

@@ -23,12 +23,20 @@ RewriteBase /SME/
 # Block direct access to app/ and database/ directories
 RewriteRule ^(app|database)(/|$) - [F,L]
 
+# ── Root URL → public/index.php (login or dashboard) ─────────────────
+RewriteRule ^$ public/index.php [L,QSA]
+RewriteRule ^index\.php$ public/index.php [L,QSA]
+
 # ── Public / Auth Pages ───────────────────────────────────────────────
 RewriteRule ^login/?$ public/login.php [L,QSA]
 RewriteRule ^logout/?$ public/logout.php [L,QSA]
 RewriteRule ^dashboard/?$ public/dashboard.php [L,QSA]
 RewriteRule ^setup/?$ public/setup.php [L,QSA]
 RewriteRule ^reset-admin/?$ public/reset_admin.php [L,QSA]
+RewriteRule ^forgot-password/?$ public/forgot_password.php [L,QSA]
+RewriteRule ^reset-password/?$ public/reset_password.php [L,QSA]
+RewriteRule ^verify-email/?$ public/verify_email.php [L,QSA]
+RewriteRule ^change-password/?$ public/force_change_password.php [L,QSA]
 
 # ── Module Index Routes ───────────────────────────────────────────────
 RewriteRule ^alerts/?$ modules/alerts/index.php [L,QSA]
@@ -92,6 +100,7 @@ RewriteRule ^support/tickets/?$ modules/support/tickets.php [L,QSA]
 # Admin
 RewriteRule ^admin/users/?$ modules/admin/users.php [L,QSA]
 RewriteRule ^admin/businesses/?$ modules/admin/businesses.php [L,QSA]
+RewriteRule ^admin/subscriptions/?$ modules/admin/subscriptions.php [L,QSA]
 RewriteRule ^admin/settings/?$ modules/admin/settings.php [L,QSA]
 
 # Reports

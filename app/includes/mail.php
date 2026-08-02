@@ -25,7 +25,7 @@ function appMail(string $to, string $subject, string $htmlBody, string $toName =
         'password'   => $rows['smtp_password'] ?? '',
         'encryption' => $rows['smtp_encryption'] ?? 'tls',
         'fromEmail'  => $rows['smtp_from_email'] ?: $rows['smtp_username'],
-        'fromName'   => $rows['smtp_from_name']  ?? (defined('APP_NAME') ? APP_NAME : 'Salone Bizness'),
+        'fromName'   => $rows['smtp_from_name']  ?? (defined('APP_NAME') ? APP_NAME : 'Stocqify'),
     ]);
 
     return $mailer->sendHtml($to, $subject, $htmlBody, $toName);
@@ -51,6 +51,6 @@ function appMailer(): ?\App\Lib\Mailer {
         'password'   => $rows['smtp_password'] ?? '',
         'encryption' => $rows['smtp_encryption'] ?? 'tls',
         'fromEmail'  => $rows['smtp_from_email'] ?: ($rows['smtp_username'] ?? ''),
-        'fromName'   => $rows['smtp_from_name']  ?? (defined('APP_NAME') ? APP_NAME : 'Salone Bizness'),
+        'fromName'   => $rows['smtp_from_name']  ?? (defined('APP_NAME') ? APP_NAME : 'Stocqify'),
     ]);
 }

@@ -1,7 +1,25 @@
 <?php
 require_once __DIR__ . '/../../app/includes/auth.php';
 require_once __DIR__ . '/../../app/includes/functions.php';
+require_once __DIR__ . '/../../app/includes/mail.php';
 requireLogin();
+
+// Ensure email verification table and user columns exist
+$__db2 = getDB();
+try { $__db2->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS force_password_change TINYINT NOT NULL DEFAULT 0"); } catch (\Exception $__e) {}
+try { $__db2->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at DATETIME DEFAULT NULL"); } catch (\Exception $__e) {}
+$__db2->exec("CREATE TABLE IF NOT EXISTS `email_verifications` (
+    `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `user_id`    INT UNSIGNED NOT NULL,
+    `token`      VARCHAR(64)  NOT NULL,
+    `expires_at` DATETIME     NOT NULL,
+    `used_at`    DATETIME     DEFAULT NULL,
+    `created_at` TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_ev_token` (`token`),
+    KEY `idx_ev_user`  (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+unset($__db2, $__e);
 if (!isAdmin() && !hasPermission('users')) {
     http_response_code(403);
     include APP_PATH . '/includes/403.php';
@@ -99,7 +117,15 @@ if (in_array($action, ['add', 'edit'])) {
 
         if (empty($name))  $errors[] = 'Name is required.';
         if (empty($email)) $errors[] = 'Email is required.';
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Invalid email address.';
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'Invalid email address format.';
+        } elseif ($action === 'add') {
+            // Verify the email domain actually exists and can receive mail
+            $emailDomain = substr($email, strrpos($email, '@') + 1);
+            if (!checkdnsrr($emailDomain, 'MX') && !checkdnsrr($emailDomain, 'A')) {
+                $errors[] = "The email domain '{$emailDomain}' does not appear to be valid or cannot receive emails.";
+            }
+        }
         if (empty($roleId)) $errors[] = 'Role is required.';
 
         // Non-admin: prevent assigning the system admin role via form manipulation
@@ -122,10 +148,57 @@ if (in_array($action, ['add', 'edit'])) {
         if (empty($errors)) {
             if ($action === 'add') {
                 $hash = password_hash($password, PASSWORD_BCRYPT);
-                $stmt = $db->prepare('INSERT INTO users (business_id,role_id,name,email,phone,password,is_active) VALUES (?,?,?,?,?,?,?)');
+                $stmt = $db->prepare('INSERT INTO users (business_id,role_id,name,email,phone,password,is_active,force_password_change) VALUES (?,?,?,?,?,?,?,1)');
                 $stmt->execute([$bizId, $roleId, $name, $email, $phone?:null, $hash, $isActive]);
-                auditLog('create', 'users', (int)$db->lastInsertId(), [], ['name'=>$name,'email'=>$email]);
-                flash('success', "User '{$name}' created successfully.");
+                $newUserId = (int)$db->lastInsertId();
+                auditLog('create', 'users', $newUserId, [], ['name'=>$name,'email'=>$email]);
+
+                // Generate email verification token and send welcome email
+                $vToken   = bin2hex(random_bytes(32));
+                $vExpires = date('Y-m-d H:i:s', strtotime('+48 hours'));
+                $db->prepare("INSERT INTO email_verifications (user_id, token, expires_at) VALUES (?,?,?)")
+                   ->execute([$newUserId, $vToken, $vExpires]);
+                $vLink = url('verify-email') . '?token=' . $vToken;
+                $loginLink = url('login');
+                $appName   = h(APP_NAME);
+                $safeName  = h($name);
+                $welcomeHtml = "<!DOCTYPE html><html><head><meta charset='UTF-8'></head>
+<body style='margin:0;padding:0;background:#f1f5f9;font-family:system-ui,sans-serif;'>
+  <div style='max-width:520px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);'>
+    <div style='background:linear-gradient(135deg,#1B3263,#2952a3);padding:32px 40px;text-align:center;'>
+      <img src='" . APP_LOGO . "' alt='{$appName}' style='height:48px;width:auto;border-radius:10px;margin-bottom:12px;'>
+      <h1 style='color:#fff;font-size:20px;font-weight:700;margin:0;'>{$appName}</h1>
+    </div>
+    <div style='padding:36px 40px;'>
+      <h2 style='font-size:18px;font-weight:700;color:#1e293b;margin:0 0 8px;'>Welcome, {$safeName}!</h2>
+      <p style='color:#64748b;font-size:14px;margin:0 0 16px;line-height:1.6;'>
+        Your {$appName} account has been created by an administrator. Please verify your email address to activate your account.
+      </p>
+      <p style='color:#64748b;font-size:14px;margin:0 0 8px;line-height:1.6;'>
+        <strong>Your login email:</strong> {$email}<br>
+        <strong>Temporary password:</strong> <em>provided by your administrator</em>
+      </p>
+      <p style='color:#94a3b8;font-size:13px;margin:0 0 24px;'>You will be required to set a new password on your first login.</p>
+      <a href='{$vLink}'
+         style='display:block;background:#C9A84C;color:#fff;text-decoration:none;text-align:center;
+                padding:14px 24px;border-radius:8px;font-weight:600;font-size:15px;margin-bottom:20px;'>
+        Verify Email Address
+      </a>
+      <a href='{$loginLink}'
+         style='display:block;background:#1B3263;color:#fff;text-decoration:none;text-align:center;
+                padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;margin-bottom:24px;'>
+        Sign In Now
+      </a>
+      <p style='color:#94a3b8;font-size:12px;'>This verification link expires in 48 hours.</p>
+    </div>
+    <div style='background:#f8fafc;padding:16px 40px;text-align:center;border-top:1px solid #e2e8f0;'>
+      <p style='color:#94a3b8;font-size:11px;margin:0;'>&copy; {$appName} &middot; Automated message, do not reply.</p>
+    </div>
+  </div>
+</body></html>";
+                appMail($email, "Welcome to {$appName} — Verify Your Email", $welcomeHtml, $name);
+
+                flash('success', "User '{$name}' created. A welcome &amp; verification email has been sent to {$email}.");
             } else {
                 $updateSql = 'UPDATE users SET business_id=?,role_id=?,name=?,email=?,phone=?,is_active=? WHERE id=?';
                 $params    = [$bizId, $roleId, $name, $email, $phone?:null, $isActive, $userId];

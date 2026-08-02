@@ -216,15 +216,41 @@ if (isAdmin()) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// BUSINESS USER DASHBOARD (unchanged)
+// BUSINESS USER DASHBOARD
 // ═══════════════════════════════════════════════════════════
 $bizId = currentBusinessId();
+
+// Non-admin user without a business assignment — block data access entirely
+if (!$bizId) {
+    $pageTitle = 'Welcome to ' . APP_NAME;
+    include __DIR__ . '/../app/includes/header.php';
+    include __DIR__ . '/../app/includes/sidebar.php';
+    ?>
+    <div class="flex flex-col items-center justify-center py-24 text-center max-w-md mx-auto">
+        <div class="w-20 h-20 rounded-2xl bg-blue-50 flex items-center justify-center mb-6">
+            <i class="fa-solid fa-building-circle-xmark text-4xl" style="color:#1B3263;"></i>
+        </div>
+        <h2 class="text-2xl font-bold text-gray-800 mb-3">No Business Assigned</h2>
+        <p class="text-gray-500 leading-relaxed mb-6">
+            Your account has not been linked to a business yet.<br>
+            Contact your system administrator to get started.
+        </p>
+        <a href="<?= url('support') ?>"
+           class="inline-flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors">
+            <i class="fa-solid fa-headset"></i> Contact Support
+        </a>
+    </div>
+    <?php
+    include __DIR__ . '/../app/includes/footer.php';
+    exit;
+}
 
 function bizFilter(string $column, ?int $bizId): array {
     if ($bizId) {
         return ['cond' => "$column = ?", 'params' => [$bizId]];
     }
-    return ['cond' => '1=1', 'params' => []];
+    // Fallback safety: never expose cross-business data
+    return ['cond' => '1=0', 'params' => []];
 }
 
 $bf = bizFilter('business_id', $bizId);

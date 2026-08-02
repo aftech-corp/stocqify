@@ -10,7 +10,14 @@ if (!isAdmin()) {
 
 $db = getDB();
 
-// Ensure the system_settings table exists
+// Ensure core tables exist
+$db->exec("CREATE TABLE IF NOT EXISTS `business_features` (
+    `business_id` INT UNSIGNED NOT NULL,
+    `feature_key` VARCHAR(60) NOT NULL,
+    `status` ENUM('enabled','disabled','coming_soon') NOT NULL DEFAULT 'enabled',
+    PRIMARY KEY (`business_id`,`feature_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 $db->exec("CREATE TABLE IF NOT EXISTS `system_settings` (
     `key` VARCHAR(100) NOT NULL,
     `value` TEXT DEFAULT NULL,
@@ -21,8 +28,9 @@ $db->exec("CREATE TABLE IF NOT EXISTS `system_settings` (
 // Load all settings as key => value map
 $settingsRows = $db->query("SELECT `key`, `value` FROM system_settings")->fetchAll(PDO::FETCH_KEY_PAIR);
 
-$activeTab = get('tab', 'smtp');
-$errors    = [];
+$activeTab    = get('tab', 'smtp');
+$errors       = [];
+$dangerErrors = [];
 
 $smtpTestResult = null; // [bool $ok, string[] $log]
 
@@ -105,6 +113,46 @@ if (get('action') === 'delcurrency' && get('code')) {
     redirect(url('admin/settings') . '?tab=currencies');
 }
 
+// ==================== SAVE FEATURES ====================
+if (isPost() && post('_tab') === 'features') {
+    verifyCsrf();
+    $fBizId = (int)post('features_biz_id');
+    if ($fBizId) {
+        $upsertF = $db->prepare("INSERT INTO business_features (business_id, feature_key, status) VALUES (?,?,?)
+                                 ON DUPLICATE KEY UPDATE status=VALUES(status)");
+        $allKeys = _allFeatureKeys();
+        foreach ($allKeys as $key => $meta) {
+            $val = post('feat_' . $key);
+            if (in_array($val, ['enabled','disabled','coming_soon'])) {
+                $upsertF->execute([$fBizId, $key, $val]);
+            }
+        }
+        flash('success', 'Feature settings saved.');
+        redirect(url('admin/settings') . '?tab=features&biz=' . $fBizId);
+    }
+    $activeTab = 'features';
+}
+
+function _allFeatureKeys(): array {
+    return [
+        // Finance
+        'finance_debts'              => ['label' => 'Debts',             'section' => 'Finance'],
+        'finance_payments'           => ['label' => 'Payments',          'section' => 'Finance'],
+        'finance_expenses'           => ['label' => 'Expenses',          'section' => 'Finance'],
+        'finance_income'             => ['label' => 'Income',            'section' => 'Finance'],
+        // Analytics — product businesses
+        'analytics_sales_report'     => ['label' => 'Sales Report',      'section' => 'Analytics'],
+        'analytics_financial_report' => ['label' => 'Financial Report',  'section' => 'Analytics'],
+        'analytics_inventory_report' => ['label' => 'Inventory Report',  'section' => 'Analytics'],
+        'analytics_debt_report'      => ['label' => 'Debt Report',       'section' => 'Analytics'],
+        'analytics_payment_report'   => ['label' => 'Payment Report',    'section' => 'Analytics'],
+        'analytics_customer_report'  => ['label' => 'Customer Report',   'section' => 'Analytics'],
+        'analytics_smart_alerts'     => ['label' => 'Smart Alerts',      'section' => 'Analytics'],
+        // Analytics — service businesses
+        'analytics_revenue_report'   => ['label' => 'Revenue Report',    'section' => 'Analytics (Service)'],
+    ];
+}
+
 function _settingsLoadCurrencies(array $rows): array {
     $list = json_decode($rows['currencies'] ?? '[]', true) ?: [];
     if (empty($list)) {
@@ -125,6 +173,42 @@ function _settingsSaveCurrencies(PDO $db, array $list): void {
     $stmt = $db->prepare("INSERT INTO system_settings (`key`,`value`) VALUES ('currencies',?)
                           ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)");
     $stmt->execute([json_encode($list, JSON_UNESCAPED_UNICODE)]);
+}
+
+// ==================== CLEAR ALL DATA ====================
+if (isPost() && post('_tab') === 'danger' && post('_action') === 'clear_all') {
+    verifyCsrf();
+    $me       = currentUser();
+    $confirm  = trim(post('confirm_phrase'));
+    $dangerErrors = [];
+    if ($confirm !== 'DELETE ALL DATA') {
+        $dangerErrors[] = 'Confirmation phrase does not match. Type exactly: DELETE ALL DATA';
+    }
+    if (empty($dangerErrors)) {
+        $db->exec("SET FOREIGN_KEY_CHECKS=0");
+        $tablesToTruncate = [
+            'sale_items','sales',
+            'debt_payments','debts',
+            'support_replies','support_tickets',
+            'notifications',
+            'business_subscriptions','business_features',
+            'expenses','income','payments',
+            'customers',
+            'products','categories',
+            'businesses',
+        ];
+        foreach ($tablesToTruncate as $t) {
+            try { $db->exec("TRUNCATE TABLE `{$t}`"); } catch (\Exception $e) {}
+        }
+        // Remove all non-admin users
+        $db->prepare("DELETE FROM users WHERE id != ?")->execute([$me['id']]);
+        $db->exec("SET FOREIGN_KEY_CHECKS=1");
+        // Clear admin's business_id link (businesses are gone)
+        try { $db->prepare("UPDATE users SET business_id=NULL WHERE id=?")->execute([$me['id']]); } catch (\Exception $e) {}
+        flash('success', 'All platform data has been cleared. Only your admin account remains.');
+        redirect(url('admin/settings') . '?tab=danger');
+    }
+    $activeTab = 'danger';
 }
 
 // Reload in case of edits
@@ -155,11 +239,22 @@ include __DIR__ . '/../../app/includes/sidebar.php';
               <?= $activeTab === 'currencies' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
         <i class="fa-solid fa-coins mr-1.5"></i> Currencies
     </a>
+    <a href="settings.php?tab=features"
+       class="px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors
+              <?= $activeTab === 'features' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
+        <i class="fa-solid fa-toggle-on mr-1.5"></i> Features
+    </a>
+    <a href="settings.php?tab=danger"
+       class="ml-auto px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors
+              <?= $activeTab === 'danger' ? 'border-red-500 text-red-600' : 'border-transparent text-red-400 hover:text-red-600' ?>">
+        <i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Danger Zone
+    </a>
 </div>
 
 <?php if ($activeTab === 'smtp'): ?>
 <!-- ─── SMTP Tab ─────────────────────────────────────────── -->
-<div class="max-w-2xl">
+<div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
+<div class="xl:col-span-3">
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <h3 class="font-semibold text-gray-800 mb-1">SMTP Configuration</h3>
         <p class="text-sm text-gray-500 mb-5">Outgoing email settings for invoices, notifications, and reports.</p>
@@ -230,10 +325,13 @@ include __DIR__ . '/../../app/includes/sidebar.php';
         </div>
         <?php endif; ?>
     </div>
+</div><!-- end xl:col-span-3 -->
 
+<!-- Right column: test email + tips -->
+<div class="xl:col-span-2 space-y-4">
     <!-- Test Email -->
     <?php if (!empty($settingsRows['smtp_host'])): ?>
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-4">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <h4 class="font-semibold text-gray-800 mb-1">Send Test Email</h4>
         <p class="text-sm text-gray-500 mb-4">Verify your SMTP settings work by sending a test message right now.</p>
 
@@ -256,26 +354,91 @@ include __DIR__ . '/../../app/includes/sidebar.php';
         </div>
         <?php endif; ?>
 
-        <form method="POST" class="flex gap-3 flex-wrap">
+        <form method="POST" class="space-y-3">
             <input type="hidden" name="csrf_token" value="<?= h(csrfToken()) ?>">
             <input type="hidden" name="_tab"    value="smtp">
             <input type="hidden" name="_action" value="test">
             <input type="email" name="test_to" required
                    value="<?= h($smtpTestResult['to'] ?? '') ?>"
                    placeholder="Recipient email address…"
-                   class="flex-1 min-w-48 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-            <button type="submit" class="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">
-                <i class="fa-solid fa-paper-plane mr-1"></i> Send Test
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+            <button type="submit" class="w-full bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">
+                <i class="fa-solid fa-paper-plane mr-1"></i> Send Test Email
             </button>
         </form>
     </div>
     <?php else: ?>
-    <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
+    <div class="p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
         <i class="fa-solid fa-info-circle mr-1"></i>
-        Save your SMTP settings above to enable the test email feature.
+        Save your SMTP settings to enable the test email feature.
     </div>
     <?php endif; ?>
-</div>
+
+    <!-- Tips card -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center gap-2">
+            <i class="fa-solid fa-lightbulb text-amber-500 text-sm"></i>
+            <h4 class="font-semibold text-amber-800 text-sm">Quick Setup Tips</h4>
+        </div>
+        <div class="p-4 space-y-3">
+
+            <!-- Port Guide -->
+            <div class="rounded-lg border border-gray-100 bg-gray-50 overflow-hidden">
+                <p class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400 bg-gray-100 border-b border-gray-100">Port Guide</p>
+                <div class="divide-y divide-gray-100">
+                    <div class="flex items-center gap-3 px-3 py-2">
+                        <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 flex-shrink-0">
+                            <i class="fa-solid fa-shield-halved"></i> 587 TLS
+                        </span>
+                        <span class="text-xs text-gray-600">Recommended — Gmail, Hostinger, most providers</span>
+                    </div>
+                    <div class="flex items-center gap-3 px-3 py-2">
+                        <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 flex-shrink-0">
+                            <i class="fa-solid fa-lock"></i> 465 SSL
+                        </span>
+                        <span class="text-xs text-gray-600">Fallback if TLS port 587 does not connect</span>
+                    </div>
+                    <div class="flex items-center gap-3 px-3 py-2">
+                        <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 flex-shrink-0">
+                            <i class="fa-solid fa-triangle-exclamation"></i> 25
+                        </span>
+                        <span class="text-xs text-gray-500">Unencrypted — avoid unless required</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gmail tip -->
+            <div class="rounded-lg border border-blue-100 bg-blue-50 p-3 flex gap-3">
+                <div class="w-7 h-7 rounded-md bg-white border border-blue-100 flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <span class="text-sm font-black" style="color:#EA4335">G</span>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-blue-800 mb-0.5">Gmail requires an App Password</p>
+                    <p class="text-[11px] text-blue-600 leading-relaxed">Go to Google Account → Security → 2-Step Verification → App Passwords. Use the generated 16-character password here, <em>not</em> your Google login password.</p>
+                </div>
+            </div>
+
+            <!-- Best practices -->
+            <div class="space-y-1.5">
+                <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400">Best Practices</p>
+                <div class="flex items-start gap-2">
+                    <i class="fa-solid fa-circle-check text-green-500 text-xs mt-0.5 flex-shrink-0"></i>
+                    <span class="text-xs text-gray-600"><strong>From Email</strong> should match your SMTP username to avoid spam filters</span>
+                </div>
+                <div class="flex items-start gap-2">
+                    <i class="fa-solid fa-circle-check text-green-500 text-xs mt-0.5 flex-shrink-0"></i>
+                    <span class="text-xs text-gray-600">Always send a <strong>test email</strong> after saving to confirm delivery</span>
+                </div>
+                <div class="flex items-start gap-2">
+                    <i class="fa-solid fa-circle-check text-green-500 text-xs mt-0.5 flex-shrink-0"></i>
+                    <span class="text-xs text-gray-600">Use a dedicated <strong>transactional email</strong> address (not a personal inbox)</span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div><!-- end right column -->
+</div><!-- end smtp grid -->
 
 <?php elseif ($activeTab === 'currencies'): ?>
 <!-- ─── Currencies Tab ───────────────────────────────────── -->
@@ -371,6 +534,281 @@ include __DIR__ . '/../../app/includes/sidebar.php';
         </div>
     </div>
 </div>
+<?php elseif ($activeTab === 'features'): ?>
+<!-- ─── Features Tab ──────────────────────────────────────── -->
+<?php
+$featBizId  = (int)get('biz', 0);
+$allBizList = $db->query("SELECT id, name FROM businesses WHERE is_active=1 ORDER BY name")->fetchAll();
+
+// Load current feature statuses for selected business
+$curFeats = [];
+if ($featBizId) {
+    $cfStmt = $db->prepare("SELECT feature_key, status FROM business_features WHERE business_id=?");
+    $cfStmt->execute([$featBizId]);
+    $curFeats = $cfStmt->fetchAll(PDO::FETCH_KEY_PAIR);
+}
+$allFeatureKeys = _allFeatureKeys();
+
+// Group by section
+$featSections = [];
+foreach ($allFeatureKeys as $key => $meta) {
+    $featSections[$meta['section']][$key] = $meta['label'];
+}
+?>
+
+<div class="flex flex-col lg:flex-row gap-6">
+
+    <!-- Business Selector -->
+    <div class="lg:w-64 flex-shrink-0">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <h4 class="font-semibold text-gray-700 text-sm mb-2">Select Business</h4>
+            <?php if (empty($allBizList)): ?>
+            <p class="text-sm text-gray-400">No active businesses found.</p>
+            <?php else: ?>
+            <!-- Search input -->
+            <div class="relative mb-3">
+                <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
+                <input type="text" id="feat-biz-search" placeholder="Search business…"
+                       class="w-full pl-7 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400">
+            </div>
+            <div class="space-y-1" id="feat-biz-list">
+                <?php foreach ($allBizList as $biz): ?>
+                <a href="settings.php?tab=features&biz=<?= $biz['id'] ?>"
+                   data-name="<?= h(strtolower($biz['name'])) ?>"
+                   class="feat-biz-item flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors
+                          <?= $featBizId === (int)$biz['id'] ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-50' ?>">
+                    <i class="fa-solid fa-building text-xs w-4 text-center <?= $featBizId === (int)$biz['id'] ? 'text-blue-500' : 'text-gray-400' ?>"></i>
+                    <span class="truncate"><?= h($biz['name']) ?></span>
+                </a>
+                <?php endforeach; ?>
+                <p id="feat-biz-none" class="hidden text-xs text-gray-400 px-3 py-2">No match found.</p>
+            </div>
+            <script>
+            document.getElementById('feat-biz-search')?.addEventListener('input', function() {
+                const q    = this.value.toLowerCase().trim();
+                let   hits = 0;
+                document.querySelectorAll('.feat-biz-item').forEach(el => {
+                    const show = !q || el.dataset.name.includes(q);
+                    el.style.display = show ? '' : 'none';
+                    if (show) hits++;
+                });
+                document.getElementById('feat-biz-none').style.display = (hits === 0 && q) ? '' : 'none';
+            });
+            </script>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- Feature Toggles -->
+    <div class="flex-1">
+        <?php if (!$featBizId): ?>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-16 text-center">
+            <div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fa-solid fa-toggle-on text-blue-400 text-2xl"></i>
+            </div>
+            <h3 class="font-semibold text-gray-700 mb-1">Select a business</h3>
+            <p class="text-sm text-gray-400">Choose a business from the left to manage its feature access.</p>
+        </div>
+        <?php else: ?>
+        <?php $selBiz = array_values(array_filter($allBizList, fn($b) => (int)$b['id'] === $featBizId))[0] ?? null; ?>
+        <div class="mb-4 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <i class="fa-solid fa-building text-blue-600"></i>
+            </div>
+            <div>
+                <h3 class="font-semibold text-gray-800"><?= h($selBiz['name'] ?? '') ?></h3>
+                <p class="text-xs text-gray-400">Toggle feature access for this business</p>
+            </div>
+        </div>
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token"    value="<?= h(csrfToken()) ?>">
+            <input type="hidden" name="_tab"          value="features">
+            <input type="hidden" name="features_biz_id" value="<?= $featBizId ?>">
+
+            <div class="space-y-5">
+                <?php foreach ($featSections as $section => $keys): ?>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                        <i class="fa-solid <?= $section === 'Finance' ? 'fa-coins text-pink-500' : 'fa-chart-line text-purple-500' ?> text-sm"></i>
+                        <h4 class="font-semibold text-gray-700 text-sm"><?= h($section) ?></h4>
+                    </div>
+                    <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <?php foreach ($keys as $key => $label):
+                            $cur = $curFeats[$key] ?? 'enabled';
+                        ?>
+                        <div class="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50/50">
+                            <span class="text-sm font-medium text-gray-700"><?= h($label) ?></span>
+                            <div class="flex gap-1 flex-shrink-0">
+                                <label class="feat-btn <?= $cur === 'enabled' ? 'feat-enabled-active' : 'feat-off' ?>" title="Enabled">
+                                    <input type="radio" name="feat_<?= $key ?>" value="enabled" <?= $cur === 'enabled' ? 'checked' : '' ?> class="sr-only">
+                                    <i class="fa-solid fa-circle-check text-xs"></i> On
+                                </label>
+                                <label class="feat-btn <?= $cur === 'coming_soon' ? 'feat-soon-active' : 'feat-off' ?>" title="Coming Soon">
+                                    <input type="radio" name="feat_<?= $key ?>" value="coming_soon" <?= $cur === 'coming_soon' ? 'checked' : '' ?> class="sr-only">
+                                    <i class="fa-solid fa-clock text-xs"></i> Soon
+                                </label>
+                                <label class="feat-btn <?= $cur === 'disabled' ? 'feat-disabled-active' : 'feat-off' ?>" title="Disabled">
+                                    <input type="radio" name="feat_<?= $key ?>" value="disabled" <?= $cur === 'disabled' ? 'checked' : '' ?> class="sr-only">
+                                    <i class="fa-solid fa-ban text-xs"></i> Off
+                                </label>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="mt-5 flex gap-3">
+                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
+                    <i class="fa-solid fa-save mr-1"></i> Save Feature Settings
+                </button>
+                <a href="settings.php?tab=features&biz=<?= $featBizId ?>"
+                   class="bg-gray-100 text-gray-600 px-5 py-2 rounded-lg text-sm hover:bg-gray-200">Reset</a>
+            </div>
+        </form>
+
+        <style>
+        .feat-btn {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+            cursor: pointer; transition: background .15s, color .15s;
+        }
+        .feat-off           { background: #f3f4f6; color: #9ca3af; }
+        .feat-off:hover     { background: #e5e7eb; color: #6b7280; }
+        .feat-enabled-active  { background: #d1fae5; color: #059669; }
+        .feat-soon-active     { background: #fef3c7; color: #d97706; }
+        .feat-disabled-active { background: #fee2e2; color: #dc2626; }
+        .feat-btn input[type=radio]:focus + * { outline: none; }
+        /* live preview: re-style on change via JS */
+        </style>
+        <script>
+        document.querySelectorAll('.feat-btn input[type=radio]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const group = this.closest('.flex.gap-1');
+                group.querySelectorAll('.feat-btn').forEach(btn => {
+                    btn.classList.remove('feat-enabled-active','feat-soon-active','feat-disabled-active');
+                    btn.classList.add('feat-off');
+                });
+                const map = {enabled:'feat-enabled-active', coming_soon:'feat-soon-active', disabled:'feat-disabled-active'};
+                this.closest('.feat-btn').classList.remove('feat-off');
+                this.closest('.feat-btn').classList.add(map[this.value] || 'feat-off');
+            });
+        });
+        </script>
+        <?php endif; ?>
+    </div>
+
+</div>
+
+<?php elseif ($activeTab === 'danger'): ?>
+<!-- ─── Danger Zone Tab ────────────────────────────────────── -->
+<div class="space-y-6">
+
+    <!-- Warning banner -->
+    <div class="rounded-xl border border-red-200 bg-red-50 p-4 flex gap-3">
+        <div class="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+            <i class="fa-solid fa-skull text-red-500 text-lg"></i>
+        </div>
+        <div>
+            <p class="font-bold text-red-800 text-sm">Irreversible actions ahead</p>
+            <p class="text-xs text-red-600 mt-0.5 leading-relaxed">
+                The actions on this page permanently delete data from the database.
+                There is <strong>no undo</strong>. Make sure you have a backup before proceeding.
+            </p>
+        </div>
+    </div>
+
+    <!-- Clear All Data Card -->
+    <div class="bg-white rounded-xl shadow-sm border border-red-200 overflow-hidden">
+        <div class="px-6 py-4 bg-red-50 border-b border-red-100 flex items-center gap-3">
+            <i class="fa-solid fa-trash-can text-red-500"></i>
+            <div>
+                <h3 class="font-bold text-red-800 text-sm">Clear All Platform Data</h3>
+                <p class="text-xs text-red-500">Permanently removes all businesses, users, products, sales, and more</p>
+            </div>
+        </div>
+
+        <div class="p-6 space-y-5">
+            <!-- What will be deleted -->
+            <div>
+                <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">What will be deleted</p>
+                <div class="grid grid-cols-2 gap-2">
+                    <?php foreach ([
+                        ['fa-building','Businesses & their data'],
+                        ['fa-users','All non-admin users'],
+                        ['fa-box','Products & categories'],
+                        ['fa-chart-line','Sales & sale items'],
+                        ['fa-coins','Debts, Expenses & Income'],
+                        ['fa-people-arrows','Customers'],
+                        ['fa-headset','Support tickets & replies'],
+                        ['fa-bell','Notifications'],
+                        ['fa-credit-card','Subscriptions'],
+                        ['fa-toggle-on','Feature flag settings'],
+                    ] as [$icon, $label]): ?>
+                    <div class="flex items-center gap-2 text-xs text-gray-600 bg-red-50 rounded-lg px-3 py-2">
+                        <i class="fa-solid <?= $icon ?> text-red-400 w-3.5 text-center"></i>
+                        <?= $label ?>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <!-- What will be kept -->
+            <div class="rounded-lg border border-green-100 bg-green-50 px-4 py-3 flex items-center gap-3">
+                <i class="fa-solid fa-shield-halved text-green-500"></i>
+                <p class="text-xs text-green-700">
+                    <strong>Your admin account</strong> and <strong>SMTP / system settings</strong> will be preserved.
+                </p>
+            </div>
+
+            <!-- Confirmation form -->
+            <?php if (!empty($dangerErrors ?? [])): ?>
+            <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+                <?php foreach ($dangerErrors as $e): ?>
+                <p class="text-red-700 text-sm"><i class="fa-solid fa-circle-xmark mr-1"></i><?= h($e) ?></p>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+
+            <form method="POST" id="clearDataForm" onsubmit="return confirmClearData(event)">
+                <input type="hidden" name="csrf_token" value="<?= h(csrfToken()) ?>">
+                <input type="hidden" name="_tab"    value="danger">
+                <input type="hidden" name="_action" value="clear_all">
+                <div class="space-y-3">
+                    <label class="block text-sm font-medium text-gray-700">
+                        Type <code class="bg-gray-100 px-1.5 py-0.5 rounded text-red-700 font-mono text-xs">DELETE ALL DATA</code> to confirm
+                    </label>
+                    <input type="text" name="confirm_phrase" id="confirmPhrase"
+                           placeholder="DELETE ALL DATA" autocomplete="off"
+                           class="w-full px-3 py-2.5 border-2 border-red-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-red-400 focus:border-red-400 outline-none bg-red-50 placeholder-red-300">
+                    <button type="submit" id="clearBtn"
+                            class="w-full bg-red-600 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                            disabled>
+                        <i class="fa-solid fa-trash-can mr-2"></i> Clear All Platform Data
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    const inp = document.getElementById('confirmPhrase');
+    const btn = document.getElementById('clearBtn');
+    inp?.addEventListener('input', () => {
+        btn.disabled = inp.value !== 'DELETE ALL DATA';
+    });
+})();
+function confirmClearData(e) {
+    if (document.getElementById('confirmPhrase')?.value !== 'DELETE ALL DATA') {
+        e.preventDefault(); return false;
+    }
+    return confirm('⚠️ FINAL WARNING\n\nThis will permanently delete ALL businesses, users, products, sales and related data.\n\nThis cannot be undone. Continue?');
+}
+</script>
+
 <?php endif; ?>
 
 <?php include __DIR__ . '/../../app/includes/footer.php'; ?>

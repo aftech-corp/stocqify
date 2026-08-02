@@ -3,10 +3,12 @@
 // Application Configuration
 // ============================================================
 
-define('APP_NAME', 'Salone Bizness');
+define('APP_URL',     'http://localhost/SME/public');
+define('SITE_URL',    'http://localhost/SME');
+define('APP_NAME',    'Stocqify');
+define('APP_TAGLINE', 'Manage Smarter. Grow Faster.');
+define('APP_LOGO',    APP_URL . '/assets/img/logo.png');
 define('APP_VERSION', '1.0.0');
-define('APP_URL', 'http://localhost/SME/public');
-define('SITE_URL', 'http://localhost/SME');
 define('BASE_PATH', dirname(__DIR__, 2));
 define('APP_PATH', dirname(__DIR__));
 define('PUBLIC_PATH', BASE_PATH . '/public');

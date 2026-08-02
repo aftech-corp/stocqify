@@ -1,6 +1,6 @@
 <?php
 /**
- * Salone Bizness - Admin Reset & Seed Loader
+ * Stocqify - Admin Reset & Seed Loader
  * Visit this page to fix login issues or reload demo data.
  * DELETE this file after use.
  */
@@ -206,7 +206,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fix / Reset | Salone Bizness</title>
+    <title>Fix / Reset | Stocqify</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen p-6">
@@ -217,7 +217,7 @@ try {
     </div>
 
     <div class="bg-white rounded-xl shadow p-6 mb-4">
-        <h1 class="text-xl font-bold text-gray-800 mb-4">Salone Bizness — Diagnostics &amp; Fix</h1>
+        <h1 class="text-xl font-bold text-gray-800 mb-4">Stocqify — Diagnostics &amp; Fix</h1>
 
         <?php foreach ($errors as $e): ?>
         <div class="bg-red-50 border border-red-300 text-red-800 rounded-lg p-3 mb-3 text-sm"><?= htmlspecialchars($e) ?></div>

@@ -155,6 +155,37 @@ function get(string $key, mixed $default = ''): mixed {
     return sanitize($_GET[$key] ?? $default);
 }
 
+function createNotification(int $userId, string $type, string $title, string $body = '', string $link = ''): void {
+    try {
+        $db = getDB();
+        $db->exec("CREATE TABLE IF NOT EXISTS `notifications` (
+            `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `user_id`    INT UNSIGNED NOT NULL,
+            `type`       VARCHAR(30) NOT NULL DEFAULT 'info',
+            `title`      VARCHAR(150) NOT NULL,
+            `body`       TEXT DEFAULT NULL,
+            `link`       VARCHAR(500) DEFAULT NULL,
+            `is_read`    TINYINT(1) NOT NULL DEFAULT 0,
+            `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `user_read` (`user_id`,`is_read`),
+            KEY `created`   (`created_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $db->prepare("INSERT INTO notifications (user_id, type, title, body, link) VALUES (?,?,?,?,?)")
+           ->execute([$userId, $type, $title, $body ?: null, $link ?: null]);
+    } catch (\Exception $e) {}
+}
+
+function notifyAdmins(string $type, string $title, string $body = '', string $link = ''): void {
+    try {
+        $db    = getDB();
+        $admins = $db->query("SELECT u.id FROM users u JOIN roles r ON r.id=u.role_id WHERE r.slug='admin' AND u.is_active=1")->fetchAll();
+        foreach ($admins as $admin) {
+            createNotification((int)$admin['id'], $type, $title, $body, $link);
+        }
+    } catch (\Exception $e) {}
+}
+
 function statusBadge(string $status): string {
     $map = [
         'paid'       => 'bg-green-100 text-green-800',

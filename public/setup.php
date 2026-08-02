@@ -1,11 +1,11 @@
 <?php
 /**
- * Salone Bizness - Database Setup & Initialization
+ * Stocqify - Database Setup & Initialization
  * Run this ONCE to create the database schema and seed data.
  * DELETE this file after setup for security.
  */
 
-define('APP_NAME', 'Salone Bizness');
+define('APP_NAME', 'Stocqify');
 define('SETUP_KEY', 'salone_bizness_setup_2024'); // Change this to something unique
 
 $configFile = __DIR__ . '/../app/config/config.php';
