@@ -14,4 +14,4 @@
 
 define('APP_URL',      'https://stocqify.com/public');
 define('SITE_URL',     'https://stocqify.com');
-define('APP_TIMEZONE', 'UTC');  // e.g. 'Africa/Freetown', 'America/New_York'
+define('APP_TIMEZONE', 'Africa/Freetown');  // e.g. 'Africa/Freetown', 'America/New_York'
