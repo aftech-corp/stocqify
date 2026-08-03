@@ -9,9 +9,9 @@
 // ============================================================
 
 define('DB_HOST',    'localhost');        // Hostinger: 'localhost'
-define('DB_NAME',    'u235415229_stocqify');  // e.g. u123456789_stocqify
-define('DB_USER',    'u235415229_a_fTech');  // e.g. u123456789_stocqify
-define('DB_PASS',    'A&fTech_stocqify@2025');   // your database password
+define('DB_NAME',    'sme_management');  // e.g. u123456789_stocqify
+define('DB_USER',    'root');  // e.g. u123456789_stocqify
+define('DB_PASS',    '');   // your database password
 define('DB_CHARSET', 'utf8mb4');
 
 function getDB(): PDO {

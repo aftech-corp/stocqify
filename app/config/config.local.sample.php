@@ -12,6 +12,6 @@
 //   SITE_URL = 'https://yourdomain.com'
 // ============================================================
 
-define('APP_URL',      'https://stocqify.com/public');
-define('SITE_URL',     'https://stocqify.com');
+define('APP_URL',      'https://yourdomain.com/public');
+define('SITE_URL',     'https://yourdomain.com');
 define('APP_TIMEZONE', 'Africa/Freetown');  // e.g. 'Africa/Freetown', 'America/New_York'
