@@ -19,10 +19,10 @@ INSERT INTO `businesses` (`name`, `address`, `phone`, `email`, `currency`) VALUE
 
 -- Admin user  (password: password)
 INSERT INTO `users` (`business_id`, `role_id`, `name`, `email`, `phone`, `password`) VALUES
-(NULL, 1, 'System Administrator', 'admin@sme.sl', '+232 76 000 001', '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'),
-(1, 2, 'Business Owner', 'owner@demo.sl', '+232 76 000 002', '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'),
-(1, 3, 'John Manager', 'manager@demo.sl', '+232 76 000 003', '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'),
-(1, 4, 'Mary Sales', 'sales@demo.sl', '+232 76 000 004', '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi');
+(NULL, 1, 'System Administrator', 'admin@sme.sl', '+232 76 000 001', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'),
+(1, 2, 'Business Owner', 'owner@demo.sl', '+232 76 000 002', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'),
+(1, 3, 'John Manager', 'manager@demo.sl', '+232 76 000 003', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'),
+(1, 4, 'Mary Sales', 'sales@demo.sl', '+232 76 000 004', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi');
 
 -- Product Categories
 INSERT INTO `categories` (`business_id`, `name`, `description`) VALUES
