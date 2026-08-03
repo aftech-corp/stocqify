@@ -13,8 +13,8 @@ if (file_exists($__localConfig)) {
 unset($__localConfig);
 
 // ── URLs (defaults: local XAMPP) ─────────────────────────────
-if (!defined('APP_URL'))  define('APP_URL',  'http://localhost/SME/public');
-if (!defined('SITE_URL')) define('SITE_URL', 'http://localhost/SME');
+if (!defined('APP_URL'))  define('APP_URL',  'https://stocqify.com/public');
+if (!defined('SITE_URL')) define('SITE_URL', 'https://stocqify.com/');
 
 // ── Branding ─────────────────────────────────────────────────
 define('APP_NAME',    'Stocqify');
