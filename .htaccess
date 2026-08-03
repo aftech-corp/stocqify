@@ -18,7 +18,7 @@ Options -Indexes
 
 # ── Rewrite Engine ────────────────────────────────────────────────────
 RewriteEngine On
-RewriteBase /
+RewriteBase /SME/
 
 # Block direct access to app/ and database/ directories
 RewriteRule ^(app|database)(/|$) - [F,L]
