@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../app/includes/auth.php';
 require_once __DIR__ . '/../../app/includes/functions.php';
+require_once __DIR__ . '/../../app/includes/mail.php';
 requireLogin();
 
 $db    = getDB();

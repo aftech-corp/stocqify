@@ -59,6 +59,15 @@ try {
     }
 } catch (Exception $__be) { $__bellCount = 0; }
 
+// Pending demo requests count (admin only)
+$__demoPendingCount = 0;
+if (isAdmin()) {
+    try {
+        $__dq = getDB()->query("SELECT COUNT(*) FROM landing_demos WHERE status='pending' OR status IS NULL");
+        $__demoPendingCount = $__dq ? (int)$__dq->fetchColumn() : 0;
+    } catch (\Exception $__de) { $__demoPendingCount = 0; }
+}
+
 // Platform notification items for dropdown
 $__notifItems   = [];
 $__notifUnread  = 0;
@@ -125,6 +134,19 @@ function sidebarLink(string $href, string $icon, string $label, string $current,
     return "<a href=\"{$href}\" class=\"{$cls}\">
                 <i class=\"fa-solid {$icon} nav-icon\"></i>
                 <span>{$label}</span>
+            </a>";
+}
+
+function sidebarLinkBadge(string $href, string $icon, string $label, string $current, string $match, int $badge = 0): string {
+    $active    = strpos($current, $match) !== false;
+    $cls       = $active ? 'nav-link active' : 'nav-link';
+    $badgeHtml = $badge > 0
+        ? "<span style='margin-left:auto;background:#C9A84C;color:#0e1f3f;font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;line-height:1.7;flex-shrink:0'>{$badge}</span>"
+        : '';
+    return "<a href=\"{$href}\" class=\"{$cls}\">
+                <i class=\"fa-solid {$icon} nav-icon\"></i>
+                <span style='flex:1'>{$label}</span>
+                {$badgeHtml}
             </a>";
 }
 
@@ -522,6 +544,7 @@ function navGroup(string $id, string $icon, string $label, string $color, string
         if (isAdmin()) $adminContent .= sidebarLink(url('admin/subscriptions'),'fa-credit-card','Subscriptions',   $currentPath, 'subscriptions');
         if (isAdmin()) $adminContent .= sidebarLink(url('admin/settings'),     'fa-sliders',    'Settings',        $currentPath, 'admin/settings');
         if (isAdmin()) $adminContent .= sidebarLink(url('support/tickets'),    'fa-ticket',     'Support Tickets', $currentPath, 'support/tickets');
+        if (isAdmin()) $adminContent .= sidebarLinkBadge(url('admin/demos'), 'fa-calendar-check', 'Demo Requests', $currentPath, 'admin/demos', $__demoPendingCount);
         echo navGroup('admin', 'fa-screwdriver-wrench', 'Administration', '#38bdf8', $adminContent, $activeSection === 'admin');
         ?>
         <?php endif; ?>

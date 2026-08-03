@@ -178,10 +178,31 @@ function createNotification(int $userId, string $type, string $title, string $bo
 
 function notifyAdmins(string $type, string $title, string $body = '', string $link = ''): void {
     try {
-        $db    = getDB();
-        $admins = $db->query("SELECT u.id FROM users u JOIN roles r ON r.id=u.role_id WHERE r.slug='admin' AND u.is_active=1")->fetchAll();
+        $db     = getDB();
+        $admins = $db->query("SELECT u.id, u.email, u.name FROM users u JOIN roles r ON r.id=u.role_id WHERE r.slug='admin' AND u.is_active=1")->fetchAll();
         foreach ($admins as $admin) {
             createNotification((int)$admin['id'], $type, $title, $body, $link);
+            if (function_exists('appMail') && !empty($admin['email'])) {
+                $appName = defined('APP_NAME') ? APP_NAME : 'Stocqify';
+                $linkHtml = $link ? "<p style='margin-top:14px'><a href='" . htmlspecialchars($link) . "' style='color:#1B3263;font-weight:600'>View details &rarr;</a></p>" : '';
+                $html = "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#f1f5f9;font-family:Inter,Arial,sans-serif'>
+<div style='max-width:560px;margin:0 auto;padding:28px 16px'>
+<div style='background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.07)'>
+<div style='background:linear-gradient(135deg,#0e1f3f,#1B3263);padding:18px 24px'>
+  <span style='font-size:17px;font-weight:800;color:#fff'>{$appName}</span>
+</div>
+<div style='padding:24px'>
+  <p style='font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#C9A84C;margin:0 0 8px'>{$type}</p>
+  <h2 style='font-size:18px;font-weight:800;color:#0e1f3f;margin:0 0 12px'>" . htmlspecialchars($title) . "</h2>
+  " . ($body ? "<p style='font-size:14px;color:#64748b;line-height:1.7;margin:0'>" . nl2br(htmlspecialchars($body)) . "</p>" : '') . "
+  {$linkHtml}
+</div>
+<div style='background:#f8fafc;border-top:1px solid #e2e8f0;padding:12px 24px;text-align:center'>
+  <p style='margin:0;font-size:12px;color:#94a3b8'>&copy; " . date('Y') . " {$appName}. Admin notification.</p>
+</div>
+</div></div></body></html>";
+                appMail($admin['email'], "[{$appName}] {$title}", $html, $admin['name'] ?? '');
+            }
         }
     } catch (\Exception $e) {}
 }

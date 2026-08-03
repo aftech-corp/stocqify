@@ -28,6 +28,7 @@ RewriteRule ^$ public/index.php [L,QSA]
 RewriteRule ^index\.php$ public/index.php [L,QSA]
 
 # ── Public / Auth Pages ───────────────────────────────────────────────
+RewriteRule ^landing/?$ public/landing.php [L,QSA]
 RewriteRule ^login/?$ public/login.php [L,QSA]
 RewriteRule ^logout/?$ public/logout.php [L,QSA]
 RewriteRule ^dashboard/?$ public/dashboard.php [L,QSA]
@@ -101,6 +102,7 @@ RewriteRule ^support/tickets/?$ modules/support/tickets.php [L,QSA]
 RewriteRule ^admin/users/?$ modules/admin/users.php [L,QSA]
 RewriteRule ^admin/businesses/?$ modules/admin/businesses.php [L,QSA]
 RewriteRule ^admin/subscriptions/?$ modules/admin/subscriptions.php [L,QSA]
+RewriteRule ^admin/demos/?$ modules/admin/demos.php [L,QSA]
 RewriteRule ^admin/settings/?$ modules/admin/settings.php [L,QSA]
 
 # Reports

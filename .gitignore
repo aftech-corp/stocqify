@@ -1,6 +1,7 @@
-# ── Database credentials ─────────────────────────────────────
-# Never commit real credentials. Use database.sample.php as the template.
+# ── Credentials & local overrides ────────────────────────────
+# Never commit real credentials. Use *.sample.php as the template.
 app/config/database.php
+app/config/config.local.php
 
 # ── User uploaded files ───────────────────────────────────────
 # These are generated at runtime — not part of source code
@@ -8,7 +9,10 @@ uploads/
 public/uploads/
 
 # ── Database dumps ────────────────────────────────────────────
-*.sql
+# Keep database/schema.sql and database/seed.sql; ignore all other SQL dumps
+/database/dump_*.sql
+/database/backup_*.sql
+/*.sql
 
 # ── Environment / secrets ─────────────────────────────────────
 .env

@@ -175,37 +175,75 @@ function _settingsSaveCurrencies(PDO $db, array $list): void {
     $stmt->execute([json_encode($list, JSON_UNESCAPED_UNICODE)]);
 }
 
-// ==================== CLEAR ALL DATA ====================
-if (isPost() && post('_tab') === 'danger' && post('_action') === 'clear_all') {
+function _dangerCategories(): array {
+    return [
+        'sales'         => ['label' => 'Sales & Invoices',         'tables' => ['sale_items', 'sales'],                                     'icon' => 'fa-chart-line',    'desc' => 'All sale records and line items'],
+        'debts'         => ['label' => 'Debts & Payments',         'tables' => ['debt_payments', 'debts', 'payments'],                      'icon' => 'fa-coins',         'desc' => 'Debt records and payment history'],
+        'finance'       => ['label' => 'Expenses & Income',        'tables' => ['expenses', 'income'],                                      'icon' => 'fa-wallet',        'desc' => 'Expense and income entries'],
+        'customers'     => ['label' => 'Customers',                'tables' => ['customers'],                                               'icon' => 'fa-users',         'desc' => 'Customer directory'],
+        'products'      => ['label' => 'Products & Categories',    'tables' => ['products', 'categories'],                                  'icon' => 'fa-box',           'desc' => 'Product catalogue and categories'],
+        'support'       => ['label' => 'Support Tickets',          'tables' => ['support_replies', 'support_tickets'],                      'icon' => 'fa-headset',       'desc' => 'All support tickets and replies'],
+        'notifications' => ['label' => 'Notifications',            'tables' => ['notifications'],                                           'icon' => 'fa-bell',          'desc' => 'In-app notification history'],
+        'businesses'    => ['label' => 'Businesses',               'tables' => ['businesses'],                                              'icon' => 'fa-building',      'desc' => 'Business accounts'],
+        'users'         => ['label' => 'Non-Admin Users',          'tables' => [],                                                          'icon' => 'fa-user-xmark',    'desc' => 'All user accounts except yours'],
+        'subscriptions' => ['label' => 'Subscriptions & Features', 'tables' => ['business_subscriptions', 'business_features'],             'icon' => 'fa-credit-card',   'desc' => 'Business plans and feature settings'],
+        'landing'       => ['label' => 'Demo Requests & Contacts', 'tables' => ['landing_demos', 'landing_contacts', 'landing_newsletter'], 'icon' => 'fa-calendar-check','desc' => 'Demo bookings, contact forms, newsletter'],
+    ];
+}
+
+// ==================== SAVE GENERAL SETTINGS ====================
+if (isPost() && post('_tab') === 'general') {
     verifyCsrf();
-    $me       = currentUser();
-    $confirm  = trim(post('confirm_phrase'));
-    $dangerErrors = [];
-    if ($confirm !== 'DELETE ALL DATA') {
-        $dangerErrors[] = 'Confirmation phrase does not match. Type exactly: DELETE ALL DATA';
+    $generalFields = [
+        'contact_email', 'contact_phone', 'contact_whatsapp',
+        'contact_location', 'contact_hours',
+        'social_facebook', 'social_twitter', 'social_instagram',
+        'social_whatsapp', 'social_linkedin',
+    ];
+    $upsertG = $db->prepare("INSERT INTO system_settings (`key`,`value`) VALUES (?,?)
+                             ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)");
+    foreach ($generalFields as $f) {
+        $upsertG->execute([$f, trim((string)(post($f) ?? ''))]);
     }
+    flash('success', 'General settings saved successfully.');
+    redirect(url('admin/settings') . '?tab=general');
+}
+
+// ==================== CLEAR SELECTED DATA ====================
+if (isPost() && post('_tab') === 'danger' && post('_action') === 'clear_selected') {
+    verifyCsrf();
+    $me           = currentUser();
+    $confirm      = trim((string)(post('confirm_phrase') ?? ''));
+    $selected     = array_filter((array)(post('categories') ?? []));
+    $allCats      = _dangerCategories();
+    $dangerErrors = [];
+
+    if (empty($selected)) {
+        $dangerErrors[] = 'Select at least one data category to delete.';
+    }
+    if ($confirm !== 'PERMANENTLY DELETE') {
+        $dangerErrors[] = 'Confirmation phrase does not match. Type exactly: PERMANENTLY DELETE';
+    }
+    $selected = array_values(array_intersect($selected, array_keys($allCats)));
+
     if (empty($dangerErrors)) {
         $db->exec("SET FOREIGN_KEY_CHECKS=0");
-        $tablesToTruncate = [
-            'sale_items','sales',
-            'debt_payments','debts',
-            'support_replies','support_tickets',
-            'notifications',
-            'business_subscriptions','business_features',
-            'expenses','income','payments',
-            'customers',
-            'products','categories',
-            'businesses',
-        ];
-        foreach ($tablesToTruncate as $t) {
-            try { $db->exec("TRUNCATE TABLE `{$t}`"); } catch (\Exception $e) {}
+        foreach ($selected as $catKey) {
+            $cat = $allCats[$catKey] ?? null;
+            if (!$cat) continue;
+            foreach ($cat['tables'] as $t) {
+                try { $db->exec("TRUNCATE TABLE `{$t}`"); } catch (\Exception $e) {}
+            }
+            if ($catKey === 'users') {
+                try { $db->prepare("DELETE FROM users WHERE id != ?")->execute([$me['id']]); } catch (\Exception $e) {}
+            }
+            if ($catKey === 'businesses') {
+                try { $db->prepare("UPDATE users SET business_id=NULL WHERE id=?")->execute([$me['id']]); } catch (\Exception $e) {}
+            }
         }
-        // Remove all non-admin users
-        $db->prepare("DELETE FROM users WHERE id != ?")->execute([$me['id']]);
         $db->exec("SET FOREIGN_KEY_CHECKS=1");
-        // Clear admin's business_id link (businesses are gone)
-        try { $db->prepare("UPDATE users SET business_id=NULL WHERE id=?")->execute([$me['id']]); } catch (\Exception $e) {}
-        flash('success', 'All platform data has been cleared. Only your admin account remains.');
+        $catLbls = implode(', ', array_map(fn($k) => $allCats[$k]['label'], $selected));
+        flash('success', "Data cleared: {$catLbls}. Your admin account and system settings are preserved.");
         redirect(url('admin/settings') . '?tab=danger');
     }
     $activeTab = 'danger';
@@ -243,6 +281,11 @@ include __DIR__ . '/../../app/includes/sidebar.php';
        class="px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors
               <?= $activeTab === 'features' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
         <i class="fa-solid fa-toggle-on mr-1.5"></i> Features
+    </a>
+    <a href="settings.php?tab=general"
+       class="px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors
+              <?= $activeTab === 'general' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
+        <i class="fa-solid fa-sliders mr-1.5"></i> General
     </a>
     <a href="settings.php?tab=danger"
        class="ml-auto px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors
@@ -702,6 +745,103 @@ foreach ($allFeatureKeys as $key => $meta) {
 
 </div>
 
+<?php elseif ($activeTab === 'general'): ?>
+<!-- ─── General Settings Tab ────────────────────────────────── -->
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="<?= h(csrfToken()) ?>">
+    <input type="hidden" name="_tab" value="general">
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
+
+        <!-- Contact Information -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div class="flex items-center gap-3 mb-5">
+                <div class="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-address-card text-blue-600"></i>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-gray-800">Contact Information</h3>
+                    <p class="text-xs text-gray-500">Displayed on the landing page contact section</p>
+                </div>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Contact Email</label>
+                    <input type="email" name="contact_email" value="<?= h($settingsRows['contact_email'] ?? '') ?>"
+                        placeholder="hello@yourcompany.com"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                    <input type="text" name="contact_phone" value="<?= h($settingsRows['contact_phone'] ?? '') ?>"
+                        placeholder="+1 555 000 0000"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">WhatsApp Number</label>
+                    <input type="text" name="contact_whatsapp" value="<?= h($settingsRows['contact_whatsapp'] ?? '') ?>"
+                        placeholder="+15550000000"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    <p class="text-xs text-gray-400 mt-1">Include country code without spaces (e.g. +23279000000)</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Location / Address</label>
+                    <input type="text" name="contact_location" value="<?= h($settingsRows['contact_location'] ?? '') ?>"
+                        placeholder="City, Country"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Support Hours</label>
+                    <input type="text" name="contact_hours" value="<?= h($settingsRows['contact_hours'] ?? '') ?>"
+                        placeholder="Mon – Fri, 9 AM – 5 PM"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+            </div>
+        </div>
+
+        <!-- Social Media Links -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div class="flex items-center gap-3 mb-5">
+                <div class="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-share-nodes text-indigo-600"></i>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-gray-800">Social Media Links</h3>
+                    <p class="text-xs text-gray-500">Shown as clickable icons in the landing page footer</p>
+                </div>
+            </div>
+            <div class="space-y-4">
+                <?php foreach ([
+                    ['social_facebook',  'fa-brands fa-facebook-f',  '#3b5998', 'Facebook',    'https://facebook.com/yourpage'],
+                    ['social_twitter',   'fa-brands fa-x-twitter',   '#000000', 'Twitter / X', 'https://x.com/yourhandle'],
+                    ['social_instagram', 'fa-brands fa-instagram',   '#e1306c', 'Instagram',   'https://instagram.com/yourhandle'],
+                    ['social_whatsapp',  'fa-brands fa-whatsapp',    '#25d366', 'WhatsApp',    'https://wa.me/15550000000'],
+                    ['social_linkedin',  'fa-brands fa-linkedin-in', '#0a66c2', 'LinkedIn',    'https://linkedin.com/company/yourcompany'],
+                ] as [$sKey, $sIcon, $sColor, $sLabel, $sPh]): ?>
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                         style="background:<?= $sColor ?>22">
+                        <i class="<?= $sIcon ?> text-sm" style="color:<?= $sColor ?>"></i>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-medium text-gray-600 mb-1"><?= $sLabel ?></label>
+                        <input type="text" name="<?= $sKey ?>" value="<?= h($settingsRows[$sKey] ?? '') ?>"
+                            placeholder="<?= $sPh ?>"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
+            <i class="fa-solid fa-save mr-1"></i> Save General Settings
+        </button>
+    </div>
+</form>
+
 <?php elseif ($activeTab === 'danger'): ?>
 <!-- ─── Danger Zone Tab ────────────────────────────────────── -->
 <div class="space-y-6">
@@ -720,92 +860,136 @@ foreach ($allFeatureKeys as $key => $meta) {
         </div>
     </div>
 
-    <!-- Clear All Data Card -->
+    <!-- Select Data to Delete -->
     <div class="bg-white rounded-xl shadow-sm border border-red-200 overflow-hidden">
         <div class="px-6 py-4 bg-red-50 border-b border-red-100 flex items-center gap-3">
             <i class="fa-solid fa-trash-can text-red-500"></i>
             <div>
-                <h3 class="font-bold text-red-800 text-sm">Clear All Platform Data</h3>
-                <p class="text-xs text-red-500">Permanently removes all businesses, users, products, sales, and more</p>
+                <h3 class="font-bold text-red-800 text-sm">Select Data to Delete</h3>
+                <p class="text-xs text-red-500">Choose which categories to permanently remove, then confirm below</p>
             </div>
         </div>
 
-        <div class="p-6 space-y-5">
-            <!-- What will be deleted -->
-            <div>
-                <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">What will be deleted</p>
-                <div class="grid grid-cols-2 gap-2">
-                    <?php foreach ([
-                        ['fa-building','Businesses & their data'],
-                        ['fa-users','All non-admin users'],
-                        ['fa-box','Products & categories'],
-                        ['fa-chart-line','Sales & sale items'],
-                        ['fa-coins','Debts, Expenses & Income'],
-                        ['fa-people-arrows','Customers'],
-                        ['fa-headset','Support tickets & replies'],
-                        ['fa-bell','Notifications'],
-                        ['fa-credit-card','Subscriptions'],
-                        ['fa-toggle-on','Feature flag settings'],
-                    ] as [$icon, $label]): ?>
-                    <div class="flex items-center gap-2 text-xs text-gray-600 bg-red-50 rounded-lg px-3 py-2">
-                        <i class="fa-solid <?= $icon ?> text-red-400 w-3.5 text-center"></i>
-                        <?= $label ?>
+        <form method="POST" id="clearDataForm" onsubmit="return confirmClearData(event)">
+            <input type="hidden" name="csrf_token" value="<?= h(csrfToken()) ?>">
+            <input type="hidden" name="_tab"    value="danger">
+            <input type="hidden" name="_action" value="clear_selected">
+
+            <div class="p-6 space-y-5">
+
+                <!-- Category checkboxes -->
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide">Data Categories</p>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="toggleAllDanger(true)"
+                                class="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50">
+                                Select All
+                            </button>
+                            <button type="button" onclick="toggleAllDanger(false)"
+                                class="text-xs text-gray-500 hover:text-gray-700 font-medium px-2 py-1 rounded hover:bg-gray-50">
+                                Deselect All
+                            </button>
+                        </div>
                     </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="dangerCatGrid">
+                        <?php
+                        $__prevSel = (array)(post('categories') ?? []);
+                        foreach (_dangerCategories() as $catKey => $cat):
+                            $catChecked = in_array($catKey, $__prevSel) ? 'checked' : '';
+                        ?>
+                        <label class="danger-cat-item flex items-start gap-3 p-3 rounded-lg border <?= $catChecked ? 'border-red-300 bg-red-50/60' : 'border-gray-200' ?> cursor-pointer hover:border-red-300 hover:bg-red-50/50 transition-colors">
+                            <input type="checkbox" name="categories[]" value="<?= h($catKey) ?>" <?= $catChecked ?>
+                                class="danger-chk mt-0.5 rounded border-gray-300 text-red-600 focus:ring-red-500">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid <?= h($cat['icon']) ?> text-red-400 text-xs w-3.5 text-center"></i>
+                                    <span class="danger-lbl text-sm font-semibold text-gray-700"><?= h($cat['label']) ?></span>
+                                </div>
+                                <p class="text-xs text-gray-400 mt-0.5"><?= h($cat['desc']) ?></p>
+                            </div>
+                        </label>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <!-- What will be preserved -->
+                <div class="rounded-lg border border-green-100 bg-green-50 px-4 py-3 flex items-center gap-3">
+                    <i class="fa-solid fa-shield-halved text-green-500"></i>
+                    <p class="text-xs text-green-700">
+                        <strong>Your admin account</strong> and <strong>SMTP / system settings</strong> will always be preserved.
+                    </p>
+                </div>
+
+                <!-- Errors -->
+                <?php if (!empty($dangerErrors ?? [])): ?>
+                <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <?php foreach ($dangerErrors as $e): ?>
+                    <p class="text-red-700 text-sm"><i class="fa-solid fa-circle-xmark mr-1"></i><?= h($e) ?></p>
                     <?php endforeach; ?>
                 </div>
-            </div>
+                <?php endif; ?>
 
-            <!-- What will be kept -->
-            <div class="rounded-lg border border-green-100 bg-green-50 px-4 py-3 flex items-center gap-3">
-                <i class="fa-solid fa-shield-halved text-green-500"></i>
-                <p class="text-xs text-green-700">
-                    <strong>Your admin account</strong> and <strong>SMTP / system settings</strong> will be preserved.
-                </p>
-            </div>
-
-            <!-- Confirmation form -->
-            <?php if (!empty($dangerErrors ?? [])): ?>
-            <div class="bg-red-50 border border-red-200 rounded-lg p-3">
-                <?php foreach ($dangerErrors as $e): ?>
-                <p class="text-red-700 text-sm"><i class="fa-solid fa-circle-xmark mr-1"></i><?= h($e) ?></p>
-                <?php endforeach; ?>
-            </div>
-            <?php endif; ?>
-
-            <form method="POST" id="clearDataForm" onsubmit="return confirmClearData(event)">
-                <input type="hidden" name="csrf_token" value="<?= h(csrfToken()) ?>">
-                <input type="hidden" name="_tab"    value="danger">
-                <input type="hidden" name="_action" value="clear_all">
+                <!-- Confirmation -->
                 <div class="space-y-3">
+                    <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                        <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+                        <span id="dangerSelCount">No categories selected.</span>
+                    </div>
                     <label class="block text-sm font-medium text-gray-700">
-                        Type <code class="bg-gray-100 px-1.5 py-0.5 rounded text-red-700 font-mono text-xs">DELETE ALL DATA</code> to confirm
+                        Type <code class="bg-gray-100 px-1.5 py-0.5 rounded text-red-700 font-mono text-xs">PERMANENTLY DELETE</code> to confirm
                     </label>
                     <input type="text" name="confirm_phrase" id="confirmPhrase"
-                           placeholder="DELETE ALL DATA" autocomplete="off"
+                           placeholder="PERMANENTLY DELETE" autocomplete="off"
                            class="w-full px-3 py-2.5 border-2 border-red-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-red-400 focus:border-red-400 outline-none bg-red-50 placeholder-red-300">
                     <button type="submit" id="clearBtn"
                             class="w-full bg-red-600 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
                             disabled>
-                        <i class="fa-solid fa-trash-can mr-2"></i> Clear All Platform Data
+                        <i class="fa-solid fa-trash-can mr-2"></i> Delete Selected Data
                     </button>
                 </div>
-            </form>
-        </div>
+            </div>
+        </form>
     </div>
 </div>
 <script>
 (function() {
-    const inp = document.getElementById('confirmPhrase');
-    const btn = document.getElementById('clearBtn');
-    inp?.addEventListener('input', () => {
-        btn.disabled = inp.value !== 'DELETE ALL DATA';
-    });
-})();
-function confirmClearData(e) {
-    if (document.getElementById('confirmPhrase')?.value !== 'DELETE ALL DATA') {
-        e.preventDefault(); return false;
+    const grid   = document.getElementById('dangerCatGrid');
+    const phrase = document.getElementById('confirmPhrase');
+    const btn    = document.getElementById('clearBtn');
+    const selTxt = document.getElementById('dangerSelCount');
+
+    function getChecked() {
+        return grid ? [...grid.querySelectorAll('.danger-chk:checked')] : [];
     }
-    return confirm('⚠️ FINAL WARNING\n\nThis will permanently delete ALL businesses, users, products, sales and related data.\n\nThis cannot be undone. Continue?');
+    function update() {
+        const checked = getChecked();
+        const labels  = checked.map(c => c.closest('label')?.querySelector('.danger-lbl')?.textContent?.trim()).filter(Boolean);
+        selTxt.textContent = checked.length
+            ? checked.length + ' selected: ' + labels.join(', ')
+            : 'No categories selected.';
+        btn.disabled = !(checked.length > 0 && phrase?.value === 'PERMANENTLY DELETE');
+    }
+    grid?.addEventListener('change', update);
+    phrase?.addEventListener('input', update);
+    update(); // run on load in case of re-render with errors
+})();
+function toggleAllDanger(check) {
+    document.querySelectorAll('#dangerCatGrid .danger-chk').forEach(c => c.checked = check);
+    document.querySelectorAll('#dangerCatGrid .danger-cat-item').forEach(el => {
+        el.classList.toggle('border-red-300', check);
+        el.classList.toggle('bg-red-50/60', check);
+        el.classList.toggle('border-gray-200', !check);
+    });
+    document.getElementById('dangerCatGrid')?.dispatchEvent(new Event('change'));
+}
+function confirmClearData(e) {
+    const checked = [...document.querySelectorAll('#dangerCatGrid .danger-chk:checked')];
+    if (!checked.length) { e.preventDefault(); alert('Please select at least one data category.'); return false; }
+    if (document.getElementById('confirmPhrase')?.value !== 'PERMANENTLY DELETE') { e.preventDefault(); return false; }
+    const labels = checked.map(c => c.closest('label')?.querySelector('.danger-lbl')?.textContent?.trim()).filter(Boolean);
+    return confirm('⚠️ FINAL WARNING\n\nYou are about to permanently delete:\n• ' + labels.join('\n• ') + '\n\nThis cannot be undone. Continue?');
 }
 </script>
 

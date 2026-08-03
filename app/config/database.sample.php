@@ -2,13 +2,16 @@
 // ============================================================
 // Database Configuration — SAMPLE FILE
 // Copy this file to database.php and fill in your credentials.
-// database.php is excluded from git to keep credentials private.
+// database.php is gitignored — never commit real credentials.
+//
+// HOSTINGER: DB_HOST is usually 'localhost'
+//            DB_NAME / DB_USER look like: u123456789_yourdb
 // ============================================================
 
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'sme_management');
-define('DB_USER', 'root');       // change this for production
-define('DB_PASS', '');           // change this for production
+define('DB_HOST',    'localhost');        // Hostinger: 'localhost'
+define('DB_NAME',    'u_your_db_name');  // e.g. u123456789_stocqify
+define('DB_USER',    'u_your_db_user');  // e.g. u123456789_stocqify
+define('DB_PASS',    'your_password');   // your database password
 define('DB_CHARSET', 'utf8mb4');
 
 function getDB(): PDO {
