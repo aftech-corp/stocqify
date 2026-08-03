@@ -36,9 +36,13 @@ if ($step === '2' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             ]);
 
+            // Create database if it doesn't exist, then select it
+            $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            $pdo->exec("USE `{$dbName}`");
+
             // Read and execute schema
             $schema = file_get_contents($schemaFile);
-            // Split on semicolons, skip empty
+            // Split on semicolons, skip empty lines and pure comment blocks
             $statements = array_filter(array_map('trim', explode(';', $schema)));
 
             foreach ($statements as $sql) {
@@ -48,7 +52,6 @@ if ($step === '2' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             // Check if seed data already exists
-            $pdo->exec("USE `{$dbName}`");
             $existing = $pdo->query("SELECT COUNT(*) FROM roles")->fetchColumn();
 
             if ($existing == 0) {
@@ -134,7 +137,7 @@ if ($step === '2' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             <strong>Security:</strong> Delete or rename <code>setup.php</code> from the <code>public/</code> folder now.
         </div>
 
-        <a href="login.php" class="block w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all">
+        <a href="login" class="block w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all">
             <i class="fa-solid fa-right-to-bracket mr-2"></i>Go to Login
         </a>
     </div>
@@ -144,7 +147,7 @@ if ($step === '2' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="bg-white rounded-2xl shadow-2xl p-8">
         <h2 class="text-xl font-bold text-gray-800 mb-1">Database Configuration</h2>
         <p class="text-gray-500 text-sm mb-6">Enter your MySQL credentials below.</p>
-        <form method="POST" action="setup.php?step=2">
+        <form method="POST" action="?step=2">
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Setup Key *</label>
@@ -187,7 +190,7 @@ if ($step === '2' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             <button type="submit" class="w-full mt-6 bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700">
                 <i class="fa-solid fa-database mr-2"></i>Initialize Database
             </button>
-            <a href="setup.php" class="block text-center text-sm text-gray-400 mt-3 hover:text-gray-600">Back</a>
+            <a href="setup" class="block text-center text-sm text-gray-400 mt-3 hover:text-gray-600">Back</a>
         </form>
     </div>
 
@@ -226,7 +229,7 @@ if ($step === '2' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             <strong>Requirements:</strong> PHP 8+, MySQL 5.7+, XAMPP or WAMP running. Make sure Apache and MySQL are started.
         </div>
 
-        <a href="setup.php?step=2" class="block w-full text-center bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700">
+        <a href="?step=2" class="block w-full text-center bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700">
             <i class="fa-solid fa-arrow-right mr-2"></i>Begin Setup
         </a>
     </div>
