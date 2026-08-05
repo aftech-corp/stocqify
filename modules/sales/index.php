@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../app/includes/auth.php';
 require_once __DIR__ . '/../../app/includes/functions.php';
 requirePermission('sales');
+requireFeature('sales_pos');
 
 $db     = getDB();
 $bizId  = currentBusinessId();
@@ -23,6 +24,14 @@ if ($status) { $where .= ' AND s.payment_status = ?'; $params[] = $status; }
 if ($type)   { $where .= ' AND s.sale_type = ?';      $params[] = $type; }
 if ($from)   { $where .= ' AND s.sale_date >= ?';     $params[] = $from; }
 if ($to)     { $where .= ' AND s.sale_date <= ?';     $params[] = $to; }
+
+// Branch filter: only apply when a specific branch is active in session
+try { $db->exec("ALTER TABLE sales ADD COLUMN IF NOT EXISTS branch_id INT UNSIGNED DEFAULT NULL"); } catch (\Throwable $e) {}
+$__activeBranch = currentBranchId();
+if ($__activeBranch !== null) {
+    $where .= ' AND s.branch_id = ?';
+    $params[] = $__activeBranch;
+}
 
 $totalQ = $db->prepare("SELECT COUNT(*) FROM sales s LEFT JOIN customers c ON c.id=s.customer_id WHERE $where");
 $totalQ->execute($params);
@@ -47,6 +56,7 @@ include __DIR__ . '/../../app/includes/header.php';
 include __DIR__ . '/../../app/includes/sidebar.php';
 ?>
 
+<?= renderBranchBanner() ?>
 <div class="flex items-center justify-between mb-6">
     <div>
         <h2 class="text-xl font-bold text-gray-800">Sales Management</h2>

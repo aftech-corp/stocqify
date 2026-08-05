@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../app/includes/auth.php';
 require_once __DIR__ . '/../../app/includes/functions.php';
 requirePermission('reports');
+requireFeature('analytics_revenue_report');
 if (isAdmin()) { flash('error','Admin does not belong to a business.'); redirect(url('admin/businesses')); }
 
 $db    = getDB();

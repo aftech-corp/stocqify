@@ -142,12 +142,12 @@ include __DIR__ . '/../../app/includes/sidebar.php';
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Cost Price (<?= CURRENCY_SYMBOL ?>)</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Cost Price (<?= currencySymbol() ?>)</label>
                             <input type="number" name="cost_price" value="<?= h($f['cost_price'] ?? '0') ?>" min="0" step="0.01"
                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Selling Price (<?= CURRENCY_SYMBOL ?>) *</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Selling Price (<?= currencySymbol() ?>) *</label>
                             <input type="number" name="selling_price" value="<?= h($f['selling_price'] ?? '0') ?>" min="0" step="0.01" required
                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>

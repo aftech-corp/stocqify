@@ -28,7 +28,8 @@ RewriteRule ^$ public/index.php [L,QSA]
 RewriteRule ^index\.php$ public/index.php [L,QSA]
 
 # ── Public / Auth Pages ───────────────────────────────────────────────
-RewriteRule ^landing/?$ public/landing.php [L,QSA]
+RewriteRule ^landing/?$      public/landing.php      [L,QSA]
+RewriteRule ^coming-soon/?$ modules/coming-soon.php [L,QSA]
 RewriteRule ^login/?$ public/login.php [L,QSA]
 RewriteRule ^logout/?$ public/logout.php [L,QSA]
 RewriteRule ^dashboard/?$ public/dashboard.php [L,QSA]
@@ -114,6 +115,29 @@ RewriteRule ^reports/payments/?$ modules/reports/payments.php [L,QSA]
 RewriteRule ^reports/customers/?$ modules/reports/customers.php [L,QSA]
 RewriteRule ^reports/service-revenue/?$ modules/reports/service_revenue.php [L,QSA]
 
+# Suppliers
+RewriteRule ^suppliers/?$ modules/suppliers/index.php [L,QSA]
+RewriteRule ^suppliers/add/?$ modules/suppliers/add.php [L,QSA]
+RewriteRule ^suppliers/edit/?$ modules/suppliers/edit.php [L,QSA]
+RewriteRule ^suppliers/view/?$ modules/suppliers/view.php [L,QSA]
+RewriteRule ^suppliers/purchase/?$ modules/suppliers/purchase.php [L,QSA]
+RewriteRule ^suppliers/pay/?$ modules/suppliers/pay.php [L,QSA]
+
+# Branches
+RewriteRule ^branches/?$        modules/branches/index.php  [L,QSA]
+RewriteRule ^branches/add/?$    modules/branches/add.php    [L,QSA]
+RewriteRule ^branches/edit/?$   modules/branches/edit.php   [L,QSA]
+RewriteRule ^branches/switch/?$ modules/branches/switch.php [L,QSA]
+
+# Drawings
+RewriteRule ^drawings/?$ modules/drawings/index.php [L,QSA]
+RewriteRule ^drawings/add/?$ modules/drawings/add.php [L,QSA]
+RewriteRule ^drawings/edit/?$ modules/drawings/edit.php [L,QSA]
+RewriteRule ^drawings/delete/?$ modules/drawings/delete.php [L,QSA]
+
+# Balance Sheet
+RewriteRule ^reports/balance-sheet/?$ modules/reports/balance_sheet.php [L,QSA]
+
 # ── .php Passthrough (for relative links resolved via <base> tag) ─────
 # These allow relative hrefs like "edit.php?id=5" to resolve correctly
 # when a page is accessed via its clean URL
@@ -128,6 +152,9 @@ RewriteRule ^income/([a-z_]+\.php)$ modules/income/$1 [L,QSA]
 RewriteRule ^payments/([a-z_]+\.php)$ modules/payments/$1 [L,QSA]
 RewriteRule ^support/([a-z_]+\.php)$ modules/support/$1 [L,QSA]
 RewriteRule ^admin/([a-z_]+\.php)$ modules/admin/$1 [L,QSA]
+RewriteRule ^suppliers/([a-z_]+\.php)$ modules/suppliers/$1 [L,QSA]
+RewriteRule ^branches/([a-z_]+\.php)$ modules/branches/$1 [L,QSA]
+RewriteRule ^drawings/([a-z_]+\.php)$ modules/drawings/$1 [L,QSA]
 RewriteRule ^reports/([a-z_]+\.php)$ modules/reports/$1 [L,QSA]
 RewriteRule ^profile/([a-z_]+\.php)$ modules/profile/$1 [L,QSA]
 RewriteRule ^alerts/([a-z_]+\.php)$ modules/alerts/$1 [L,QSA]

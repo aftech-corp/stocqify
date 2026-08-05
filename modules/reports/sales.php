@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../app/includes/auth.php';
 require_once __DIR__ . '/../../app/includes/functions.php';
 requirePermission('reports');
+requireFeature('analytics_sales_report');
 
 $db    = getDB();
 $bizId = currentBusinessId();
@@ -9,30 +10,35 @@ $from  = get('from', date('Y-m-01'));
 $to    = get('to', date('Y-m-d'));
 $export = get('export');
 
+// Branch filter
+$branchCond  = '';
+$branchParam = [];
+if (currentBranchId()) { $branchCond = ' AND branch_id = ?'; $branchParam = [currentBranchId()]; }
+
 // Main stats
 $stats = [];
 foreach (['total_amount'=>'Total Sales','amount_paid'=>'Amount Collected','balance_due'=>'Outstanding','discount_amount'=>'Discounts Given'] as $col => $label) {
-    $q = $db->prepare("SELECT COALESCE(SUM($col),0) FROM sales WHERE business_id=? AND sale_date BETWEEN ? AND ?");
-    $q->execute([$bizId,$from,$to]);
+    $q = $db->prepare("SELECT COALESCE(SUM($col),0) FROM sales WHERE business_id=? AND sale_date BETWEEN ? AND ?" . $branchCond);
+    $q->execute([$bizId,$from,$to,...$branchParam]);
     $stats[$label] = (float)$q->fetchColumn();
 }
-$cntQ = $db->prepare("SELECT COUNT(*) FROM sales WHERE business_id=? AND sale_date BETWEEN ? AND ?");
-$cntQ->execute([$bizId,$from,$to]);
+$cntQ = $db->prepare("SELECT COUNT(*) FROM sales WHERE business_id=? AND sale_date BETWEEN ? AND ?" . $branchCond);
+$cntQ->execute([$bizId,$from,$to,...$branchParam]);
 $txCount = (int)$cntQ->fetchColumn();
 
 // Top products
-$topProdQ = $db->prepare("SELECT p.name, SUM(si.quantity) AS qty_sold, SUM(si.total) AS revenue FROM sale_items si JOIN products p ON p.id=si.product_id JOIN sales s ON s.id=si.sale_id WHERE s.business_id=? AND s.sale_date BETWEEN ? AND ? GROUP BY p.id ORDER BY revenue DESC LIMIT 10");
-$topProdQ->execute([$bizId,$from,$to]);
+$topProdQ = $db->prepare("SELECT p.name, SUM(si.quantity) AS qty_sold, SUM(si.total) AS revenue FROM sale_items si JOIN products p ON p.id=si.product_id JOIN sales s ON s.id=si.sale_id WHERE s.business_id=? AND s.sale_date BETWEEN ? AND ?" . str_replace('branch_id','s.branch_id',$branchCond) . " GROUP BY p.id ORDER BY revenue DESC LIMIT 10");
+$topProdQ->execute([$bizId,$from,$to,...$branchParam]);
 $topProducts = $topProdQ->fetchAll();
 
 // Daily breakdown
-$dailyQ = $db->prepare("SELECT sale_date, COUNT(*) AS txns, SUM(total_amount) AS total, SUM(amount_paid) AS paid FROM sales WHERE business_id=? AND sale_date BETWEEN ? AND ? GROUP BY sale_date ORDER BY sale_date DESC");
-$dailyQ->execute([$bizId,$from,$to]);
+$dailyQ = $db->prepare("SELECT sale_date, COUNT(*) AS txns, SUM(total_amount) AS total, SUM(amount_paid) AS paid FROM sales WHERE business_id=? AND sale_date BETWEEN ? AND ?" . $branchCond . " GROUP BY sale_date ORDER BY sale_date DESC");
+$dailyQ->execute([$bizId,$from,$to,...$branchParam]);
 $daily = $dailyQ->fetchAll();
 
 // By payment status
-$statusQ = $db->prepare("SELECT payment_status, COUNT(*) AS cnt, SUM(total_amount) AS total FROM sales WHERE business_id=? AND sale_date BETWEEN ? AND ? GROUP BY payment_status");
-$statusQ->execute([$bizId,$from,$to]);
+$statusQ = $db->prepare("SELECT payment_status, COUNT(*) AS cnt, SUM(total_amount) AS total FROM sales WHERE business_id=? AND sale_date BETWEEN ? AND ?" . $branchCond . " GROUP BY payment_status");
+$statusQ->execute([$bizId,$from,$to,...$branchParam]);
 $byStatus = $statusQ->fetchAll();
 
 // CSV Export
@@ -41,8 +47,8 @@ if ($export === 'csv') {
     header('Content-Disposition: attachment; filename="sales_report_' . $from . '_to_' . $to . '.csv"');
     $out = fopen('php://output', 'w');
     fputcsv($out, ['Date','Invoice','Customer','Type','Total','Paid','Balance','Status']);
-    $expQ = $db->prepare("SELECT s.sale_date, s.invoice_number, c.name AS customer_name, s.sale_type, s.total_amount, s.amount_paid, s.balance_due, s.payment_status FROM sales s LEFT JOIN customers c ON c.id=s.customer_id WHERE s.business_id=? AND s.sale_date BETWEEN ? AND ? ORDER BY s.sale_date DESC");
-    $expQ->execute([$bizId,$from,$to]);
+    $expQ = $db->prepare("SELECT s.sale_date, s.invoice_number, c.name AS customer_name, s.sale_type, s.total_amount, s.amount_paid, s.balance_due, s.payment_status FROM sales s LEFT JOIN customers c ON c.id=s.customer_id WHERE s.business_id=? AND s.sale_date BETWEEN ? AND ?" . str_replace('branch_id','s.branch_id',$branchCond) . " ORDER BY s.sale_date DESC");
+    $expQ->execute([$bizId,$from,$to,...$branchParam]);
     while ($row = $expQ->fetch()) fputcsv($out, array_values($row));
     fclose($out); exit;
 }
@@ -52,6 +58,7 @@ include __DIR__ . '/../../app/includes/header.php';
 include __DIR__ . '/../../app/includes/sidebar.php';
 ?>
 
+<?= renderBranchBanner() ?>
 <div class="flex items-center justify-between mb-6">
     <h2 class="text-xl font-bold text-gray-800">Sales Report</h2>
     <div class="flex gap-2">

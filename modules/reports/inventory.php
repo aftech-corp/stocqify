@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../app/includes/auth.php';
 require_once __DIR__ . '/../../app/includes/functions.php';
 requirePermission('reports');
+requireFeature('analytics_inventory_report');
 
 $db    = getDB();
 $bizId = currentBusinessId();

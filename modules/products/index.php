@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../app/includes/auth.php';
 require_once __DIR__ . '/../../app/includes/functions.php';
 requireLogin();
+requireFeature('inventory_products');
 if (!hasPermission('inventory') && !hasPermission('sales')) {
     http_response_code(403);
     include APP_PATH . '/includes/403.php';
@@ -35,6 +36,14 @@ if ($catId) {
     $params[] = $catId;
 }
 
+// Branch filter
+try { $db->exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS branch_id INT UNSIGNED DEFAULT NULL"); } catch (\Throwable $e) {}
+$__activeBranch = currentBranchId();
+if ($__activeBranch !== null) {
+    $where .= ' AND p.branch_id = ?';
+    $params[] = $__activeBranch;
+}
+
 $totalQ = $db->prepare("SELECT COUNT(*) FROM products p WHERE $where");
 $totalQ->execute($params);
 $total = (int)$totalQ->fetchColumn();
@@ -63,6 +72,7 @@ include __DIR__ . '/../../app/includes/header.php';
 include __DIR__ . '/../../app/includes/sidebar.php';
 ?>
 
+<?= renderBranchBanner() ?>
 <div class="flex items-center justify-between mb-6">
     <div>
         <h2 class="text-xl font-bold text-gray-800">Products & Inventory</h2>

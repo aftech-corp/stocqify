@@ -40,7 +40,7 @@ include __DIR__ . '/../../app/includes/sidebar.php';
         <a href="edit.php?id=<?= $id ?>" class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-700">
             <i class="fa-solid fa-pen mr-1"></i> Edit
         </a>
-        <a href="../../modules/sales/add.php?customer_id=<?= $id ?>" class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700">
+        <a href="<?= url('sales/add') ?>?customer_id=<?= $id ?>" class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700">
             <i class="fa-solid fa-plus mr-1"></i> New Sale
         </a>
     </div>

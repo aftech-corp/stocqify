@@ -19,6 +19,7 @@ if (!empty($user['business_id'])) {
         $user['business_name']         = $__bRow['name'];
         $_SESSION['business_name']     = $__bRow['name'];
         $_SESSION['business_currency'] = $__bRow['currency'];
+        $_SESSION['business_country']  = $__bRow['country'] ?? '';
         $_SESSION['business_type']     = $__bRow['business_type'] ?? 'products';
         // Resolve business logo URL
         $__bizLogoFile = $__bRow['logo'] ?? null;
@@ -59,6 +60,17 @@ try {
     }
 } catch (Exception $__be) { $__bellCount = 0; }
 
+// Load branches for the branch switcher (non-admin business users only)
+$__branches = [];
+if (!isAdmin() && !empty($user['business_id'])) {
+    try {
+        $__brsQ = getDB()->prepare('SELECT id, name FROM branches WHERE business_id=? AND is_active=1 ORDER BY name');
+        $__brsQ->execute([$user['business_id']]);
+        $__branches = $__brsQ->fetchAll();
+        unset($__brsQ);
+    } catch (\Exception $__bre) { $__branches = []; unset($__bre); }
+}
+
 // Pending demo requests count (admin only)
 $__demoPendingCount = 0;
 if (isAdmin()) {
@@ -66,6 +78,82 @@ if (isAdmin()) {
         $__dq = getDB()->query("SELECT COUNT(*) FROM landing_demos WHERE status='pending' OR status IS NULL");
         $__demoPendingCount = $__dq ? (int)$__dq->fetchColumn() : 0;
     } catch (\Exception $__de) { $__demoPendingCount = 0; }
+}
+
+// Subscription status for notification bar (business users only)
+$__subBar = null;
+if (!isAdmin() && !empty($user['business_id'])) {
+    try {
+        $__sbdb = getDB();
+        // Ensure tables exist so the query never fails on a fresh install
+        $__sbdb->exec("CREATE TABLE IF NOT EXISTS `subscription_plans` (
+            `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            `name` VARCHAR(100) NOT NULL,
+            `slug` VARCHAR(50) NOT NULL,
+            `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+            `sort_order` SMALLINT NOT NULL DEFAULT 0,
+            `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $__sbdb->exec("CREATE TABLE IF NOT EXISTS `business_subscriptions` (
+            `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            `business_id` INT UNSIGNED NOT NULL,
+            `plan_id` INT UNSIGNED NOT NULL DEFAULT 0,
+            `status` ENUM('active','trial','expired','cancelled') NOT NULL DEFAULT 'active',
+            `expires_at` DATE DEFAULT NULL,
+            `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // Two-step query: first get the subscription, then get plan separately
+        // (avoids JOIN failing when plan_id column is missing in old schemas)
+        $__subQ = $__sbdb->prepare(
+            "SELECT bs.id, bs.status, bs.expires_at, bs.plan_id
+             FROM business_subscriptions bs
+             WHERE bs.business_id = ? AND bs.status IN ('active','trial')
+             ORDER BY bs.id DESC LIMIT 1"
+        );
+        $__subQ->execute([$user['business_id']]);
+        $__subRow = $__subQ->fetch();
+        if ($__subRow) {
+            // Look up plan name (graceful fallback if plan_id is 0 or plan not found)
+            $__planRow  = false;
+            $__nextPlan = false;
+            if ((int)$__subRow['plan_id'] > 0) {
+                $__planQ = $__sbdb->prepare("SELECT name, sort_order FROM subscription_plans WHERE id=? LIMIT 1");
+                $__planQ->execute([$__subRow['plan_id']]);
+                $__planRow = $__planQ->fetch();
+                if ($__planRow) {
+                    $__nextQ = $__sbdb->prepare(
+                        "SELECT name FROM subscription_plans WHERE sort_order > ? AND is_active=1 ORDER BY sort_order ASC LIMIT 1"
+                    );
+                    $__nextQ->execute([$__planRow['sort_order']]);
+                    $__nextPlan = $__nextQ->fetch();
+                }
+            }
+            $__planName = $__planRow ? $__planRow['name'] : 'Current Plan';
+            $__daysLeft = $__subRow['expires_at']
+                ? (int)floor((strtotime($__subRow['expires_at'] . ' 23:59:59') - time()) / 86400)
+                : null;
+            // Priority 1: countdown when ≤10 days to expiry
+            if ($__daysLeft !== null && $__daysLeft <= 10) {
+                $__subBar = [
+                    'type'    => 'countdown',
+                    'days'    => $__daysLeft,
+                    'plan'    => $__planName,
+                    'expires' => $__subRow['expires_at'],
+                    'status'  => $__subRow['status'],
+                ];
+            } else {
+                // Always show upgrade/status bar when plan is safely active
+                $__subBar = [
+                    'type'      => 'upgrade',
+                    'plan'      => $__planName,
+                    'next_plan' => $__nextPlan ? $__nextPlan['name'] : '',
+                    'expires'   => $__subRow['expires_at'],
+                    'days_left' => $__daysLeft,
+                ];
+            }
+        }
+        unset($__sbdb, $__subQ);
+    } catch (\Exception $__sbe) { $__subBar = null; }
 }
 
 // Platform notification items for dropdown
@@ -122,9 +210,9 @@ $activeSection = match(true) {
     $__isServiceBiz && inSection($currentPath, ['services','categories'])        => 'service_catalog',
     !$__isServiceBiz && inSection($currentPath, ['sales','customers'])           => 'sales',
     !$__isServiceBiz && inSection($currentPath, ['products','categories'])       => 'inventory',
-    inSection($currentPath, ['debts','payments','expenses','income'])            => 'finance',
+    inSection($currentPath, ['debts','payments','expenses','income','suppliers','drawings']) => 'finance',
     inSection($currentPath, ['reports','alerts'])                                => 'analytics',
-    inSection($currentPath, ['admin','subscriptions','support/tickets'])          => 'admin',
+    inSection($currentPath, ['admin','subscriptions','support/tickets','branches']) => 'admin',
     default                                                                      => '',
 };
 
@@ -164,7 +252,10 @@ function sidebarLinkSoon(string $href, string $icon, string $label, string $curr
 function featureNavLink(string $key, array $feats, string $href, string $icon, string $label, string $cur, string $match): string {
     $st = $feats[$key] ?? 'enabled';
     if ($st === 'disabled') return '';
-    if ($st === 'coming_soon') return sidebarLinkSoon($href, $icon, $label, $cur, $match);
+    if ($st === 'coming_soon') {
+        $soonHref = url('coming-soon') . '?feature=' . urlencode($key);
+        return sidebarLinkSoon($soonHref, $icon, $label, $cur, $match);
+    }
     return sidebarLink($href, $icon, $label, $cur, $match);
 }
 
@@ -253,6 +344,44 @@ function navGroup(string $id, string $icon, string $label, string $color, string
 }
 .sb-logo-name  { color: #fff; font-weight: 700; font-size: 14px; line-height: 1.2; }
 .sb-logo-app   { color: rgba(255,255,255,.55); font-size: 11px; margin-top: 1px; }
+
+/* ── Branch Switcher ─────────────────────────────────────── */
+.sb-branch-switcher {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--sb-border);
+    background: rgba(0,0,0,.15);
+    flex-shrink: 0;
+}
+.sb-branch-label {
+    color: rgba(255,255,255,.45);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.sb-branch-select {
+    width: 100%;
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.2);
+    color: #fff;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+}
+.sb-branch-select option {
+    background: #1B3263;
+    color: #fff;
+}
+.sb-branch-select:focus { border-color: #C9A84C; }
+.sb-branch-select:disabled { opacity: .45; cursor: not-allowed; }
+.sb-branch-hint { margin-left: auto; font-size: 9px; font-weight: 500; color: rgba(255,255,255,.35); }
 
 /* ── Nav Scroll ──────────────────────────────────────────── */
 .sb-nav {
@@ -424,6 +553,26 @@ function navGroup(string $id, string $icon, string $label, string $color, string
         <?php endif; ?>
     </div>
 
+    <?php if (!isAdmin() && !empty($user['business_id']) && count($__branches) >= 2): ?>
+    <!-- Branch Switcher -->
+    <div class="sb-branch-switcher">
+        <div class="sb-branch-label">
+            <i class="fa-solid fa-code-branch"></i> Branch
+        </div>
+        <form method="POST" action="<?= url('branches/switch') ?>">
+            <input type="hidden" name="csrf_token" value="<?= h(csrfToken()) ?>">
+            <select name="branch_id" onchange="this.form.submit()" class="sb-branch-select">
+                <option value="0" <?= empty($_SESSION['active_branch_id']) ? 'selected' : '' ?>>All Branches</option>
+                <?php foreach ($__branches as $__br): ?>
+                <option value="<?= $__br['id'] ?>" <?= (int)($_SESSION['active_branch_id'] ?? 0) === (int)$__br['id'] ? 'selected' : '' ?>>
+                    <?= h($__br['name']) ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+        </form>
+    </div>
+    <?php endif; ?>
+
     <!-- Navigation -->
     <nav class="sb-nav">
 
@@ -446,13 +595,13 @@ function navGroup(string $id, string $icon, string $label, string $color, string
         <!-- ORDERS group -->
         <?php if (hasPermission('sales')): ?>
         <?php
-        $ordContent =
-            sidebarLink(url('service-orders'), 'fa-clipboard-list', 'Service Orders', $currentPath, 'service_orders') .
-            sidebarLink(url('customers'),       'fa-users',          'Customers',      $currentPath, 'customers');
+        $ordContent = '';
+        $ordContent .= featureNavLink('sales_pos',       $__bizFeatures, url('service-orders'), 'fa-clipboard-list', 'Service Orders', $currentPath, 'service_orders');
+        $ordContent .= featureNavLink('sales_customers', $__bizFeatures, url('customers'),       'fa-users',          'Customers',      $currentPath, 'customers');
         if (!hasPermission('reports')) {
-            $ordContent .= sidebarLink(url('alerts'), 'fa-bell', 'Smart Alerts', $currentPath, 'alerts');
+            $ordContent .= featureNavLink('analytics_smart_alerts', $__bizFeatures, url('alerts'), 'fa-bell', 'Smart Alerts', $currentPath, 'alerts');
         }
-        echo navGroup('orders', 'fa-bag-shopping', 'Orders', '#22c55e', $ordContent, $activeSection === 'orders');
+        if ($ordContent) echo navGroup('orders', 'fa-bag-shopping', 'Orders', '#22c55e', $ordContent, $activeSection === 'orders');
         ?>
         <?php endif; ?>
 
@@ -461,9 +610,9 @@ function navGroup(string $id, string $icon, string $label, string $color, string
         <?php
         $svcContent = sidebarLink(url('services'), 'fa-hand-holding-heart', 'Our Services', $currentPath, 'services');
         if (hasPermission('inventory')) {
-            $svcContent .= sidebarLink(url('products/categories'), 'fa-tags', 'Categories', $currentPath, 'categories');
+            $svcContent .= featureNavLink('inventory_products', $__bizFeatures, url('products/categories'), 'fa-tags', 'Categories', $currentPath, 'categories');
         }
-        echo navGroup('service_catalog', 'fa-briefcase', 'Service Catalog', '#f59e0b', $svcContent, $activeSection === 'service_catalog');
+        if ($svcContent) echo navGroup('service_catalog', 'fa-briefcase', 'Service Catalog', '#f59e0b', $svcContent, $activeSection === 'service_catalog');
         ?>
         <?php endif; ?>
 
@@ -473,26 +622,26 @@ function navGroup(string $id, string $icon, string $label, string $color, string
         <!-- SALES group -->
         <?php if (hasPermission('sales')): ?>
         <?php
-        $salesContent =
-            sidebarLink(url('sales'),     'fa-receipt', 'Sales',     $currentPath, '/sales/') .
-            sidebarLink(url('customers'), 'fa-users',   'Customers', $currentPath, 'customers');
+        $salesContent = '';
+        $salesContent .= featureNavLink('sales_pos',       $__bizFeatures, url('sales'),     'fa-receipt',       'Sales',             $currentPath, '/sales/');
+        $salesContent .= featureNavLink('sales_customers', $__bizFeatures, url('customers'), 'fa-users',         'Customers',         $currentPath, 'customers');
         if (!hasPermission('reports')) {
-            $salesContent .= sidebarLink(url('alerts'), 'fa-bell', 'Smart Alerts', $currentPath, 'alerts');
+            $salesContent .= featureNavLink('analytics_smart_alerts', $__bizFeatures, url('alerts'), 'fa-bell', 'Smart Alerts', $currentPath, 'alerts');
         }
         if (!hasPermission('inventory')) {
-            $salesContent .= sidebarLink(url('products'), 'fa-boxes-stacked', 'Products (Stock)', $currentPath, 'products');
+            $salesContent .= featureNavLink('inventory_products', $__bizFeatures, url('products'), 'fa-boxes-stacked', 'Products (Stock)', $currentPath, 'products');
         }
-        echo navGroup('sales', 'fa-bag-shopping', 'Sales', '#22c55e', $salesContent, $activeSection === 'sales');
+        if ($salesContent) echo navGroup('sales', 'fa-bag-shopping', 'Sales', '#22c55e', $salesContent, $activeSection === 'sales');
         ?>
         <?php endif; ?>
 
         <!-- INVENTORY group -->
         <?php if (hasPermission('inventory')): ?>
         <?php
-        $invContent =
-            sidebarLink(url('products'),            'fa-boxes-stacked', 'Products',   $currentPath, 'products') .
-            sidebarLink(url('products/categories'), 'fa-tags',           'Categories', $currentPath, 'categories');
-        echo navGroup('inventory', 'fa-warehouse', 'Inventory', '#f59e0b', $invContent, $activeSection === 'inventory');
+        $invContent = '';
+        $invContent .= featureNavLink('inventory_products', $__bizFeatures, url('products'),            'fa-boxes-stacked', 'Products',   $currentPath, 'products');
+        $invContent .= featureNavLink('inventory_products', $__bizFeatures, url('products/categories'), 'fa-tags',           'Categories', $currentPath, 'categories');
+        if ($invContent) echo navGroup('inventory', 'fa-warehouse', 'Inventory', '#f59e0b', $invContent, $activeSection === 'inventory');
         ?>
         <?php endif; ?>
 
@@ -505,7 +654,9 @@ function navGroup(string $id, string $icon, string $label, string $color, string
         if (hasPermission('debts'))    $finContent .= featureNavLink('finance_debts',    $__bizFeatures, url('debts'),    'fa-file-invoice-dollar',   'Debts',    $currentPath, 'debts');
         if (hasPermission('payments')) $finContent .= featureNavLink('finance_payments', $__bizFeatures, url('payments'), 'fa-money-bill-transfer',   'Payments', $currentPath, 'payments');
         if (hasPermission('expenses')) $finContent .= featureNavLink('finance_expenses', $__bizFeatures, url('expenses'), 'fa-wallet',                'Expenses', $currentPath, 'expenses');
-        if (hasPermission('expenses')) $finContent .= featureNavLink('finance_income',   $__bizFeatures, url('income'),   'fa-circle-dollar-to-slot', 'Income',   $currentPath, 'income');
+        if (hasPermission('expenses')) $finContent .= featureNavLink('finance_income',     $__bizFeatures, url('income'),     'fa-circle-dollar-to-slot', 'Income',     $currentPath, 'income');
+        if (hasPermission('expenses')) $finContent .= featureNavLink('finance_suppliers',  $__bizFeatures, url('suppliers'),  'fa-truck',                 'Suppliers',  $currentPath, 'suppliers');
+        if (hasPermission('expenses')) $finContent .= featureNavLink('finance_drawings',   $__bizFeatures, url('drawings'),   'fa-money-bill-wave',        'Drawings',   $currentPath, 'drawings');
         if ($finContent) echo navGroup('finance', 'fa-coins', 'Finance', '#ec4899', $finContent, $activeSection === 'finance');
         ?>
         <?php endif; ?>
@@ -518,16 +669,18 @@ function navGroup(string $id, string $icon, string $label, string $color, string
                 featureNavLink('analytics_revenue_report',  $__bizFeatures, url('reports/service-revenue'), 'fa-chart-bar',           'Revenue Report',  $currentPath, 'reports/service_revenue') .
                 featureNavLink('analytics_payment_report',  $__bizFeatures, url('reports/payments'),        'fa-money-bill-trend-up', 'Payment Report',  $currentPath, 'reports/payments') .
                 featureNavLink('analytics_customer_report', $__bizFeatures, url('reports/customers'),       'fa-users-line',          'Customer Report', $currentPath, 'reports/customers') .
-                featureNavLink('analytics_smart_alerts',    $__bizFeatures, url('alerts'),                  'fa-bell',                'Smart Alerts',    $currentPath, 'alerts');
+                featureNavLink('analytics_smart_alerts',    $__bizFeatures, url('alerts'),                  'fa-bell',                'Smart Alerts',    $currentPath, 'alerts') .
+                featureNavLink('analytics_balance_sheet',   $__bizFeatures, url('reports/balance-sheet'), 'fa-scale-balanced',   'Balance Sheet',   $currentPath, 'balance_sheet');
         } else {
             $repContent =
-                featureNavLink('analytics_sales_report',      $__bizFeatures, url('reports/sales'),     'fa-chart-bar',           'Sales Report',     $currentPath, 'reports/sales') .
-                featureNavLink('analytics_financial_report',  $__bizFeatures, url('reports/financial'), 'fa-chart-pie',           'Financial Report', $currentPath, 'reports/financial') .
-                featureNavLink('analytics_inventory_report',  $__bizFeatures, url('reports/inventory'), 'fa-warehouse',           'Inventory Report', $currentPath, 'reports/inventory') .
-                featureNavLink('analytics_debt_report',       $__bizFeatures, url('reports/debts'),     'fa-file-invoice-dollar', 'Debt Report',      $currentPath, 'reports/debts') .
-                featureNavLink('analytics_payment_report',    $__bizFeatures, url('reports/payments'),  'fa-money-bill-trend-up', 'Payment Report',   $currentPath, 'reports/payments') .
-                featureNavLink('analytics_customer_report',   $__bizFeatures, url('reports/customers'), 'fa-users-line',          'Customer Report',  $currentPath, 'reports/customers') .
-                featureNavLink('analytics_smart_alerts',      $__bizFeatures, url('alerts'),            'fa-bell',                'Smart Alerts',     $currentPath, 'alerts');
+                featureNavLink('analytics_sales_report',      $__bizFeatures, url('reports/sales'),          'fa-chart-bar',           'Sales Report',     $currentPath, 'reports/sales') .
+                featureNavLink('analytics_financial_report',  $__bizFeatures, url('reports/financial'),      'fa-chart-pie',           'Financial Report', $currentPath, 'reports/financial') .
+                featureNavLink('analytics_inventory_report',  $__bizFeatures, url('reports/inventory'),      'fa-warehouse',           'Inventory Report', $currentPath, 'reports/inventory') .
+                featureNavLink('analytics_debt_report',       $__bizFeatures, url('reports/debts'),          'fa-file-invoice-dollar', 'Debt Report',      $currentPath, 'reports/debts') .
+                featureNavLink('analytics_payment_report',    $__bizFeatures, url('reports/payments'),       'fa-money-bill-trend-up', 'Payment Report',   $currentPath, 'reports/payments') .
+                featureNavLink('analytics_customer_report',   $__bizFeatures, url('reports/customers'),      'fa-users-line',          'Customer Report',  $currentPath, 'reports/customers') .
+                featureNavLink('analytics_balance_sheet',     $__bizFeatures, url('reports/balance-sheet'),  'fa-scale-balanced',      'Balance Sheet',    $currentPath, 'balance_sheet') .
+                featureNavLink('analytics_smart_alerts',      $__bizFeatures, url('alerts'),                 'fa-bell',                'Smart Alerts',     $currentPath, 'alerts');
         }
         if ($repContent) echo navGroup('analytics', 'fa-chart-line', 'Analytics', '#a78bfa', $repContent, $activeSection === 'analytics');
         ?>
@@ -540,6 +693,7 @@ function navGroup(string $id, string $icon, string $label, string $color, string
         <?php if (isAdmin() || (!empty($user['business_id']) && hasPermission('users'))): ?>
         <?php
         $adminContent = sidebarLink(url('admin/users'), 'fa-user-shield', 'Users', $currentPath, 'admin/users');
+        if (!isAdmin()) $adminContent .= featureNavLink('branches_management', $__bizFeatures, url('branches'), 'fa-code-branch', 'Branches', $currentPath, 'branches');
         if (isAdmin()) $adminContent .= sidebarLink(url('admin/businesses'),   'fa-building',   'Businesses',      $currentPath, 'admin/businesses');
         if (isAdmin()) $adminContent .= sidebarLink(url('admin/subscriptions'),'fa-credit-card','Subscriptions',   $currentPath, 'subscriptions');
         if (isAdmin()) $adminContent .= sidebarLink(url('admin/settings'),     'fa-sliders',    'Settings',        $currentPath, 'admin/settings');
@@ -552,7 +706,7 @@ function navGroup(string $id, string $icon, string $label, string $color, string
         <!-- Profile -->
         <div class="sb-divider">Account</div>
         <?php if (!isAdmin()): ?>
-        <?= sidebarLink(url('support'), 'fa-headset', 'Support', $currentPath, 'support/index') ?>
+        <?= featureNavLink('support_tickets', $__bizFeatures, url('support'), 'fa-headset', 'Support', $currentPath, 'support/index') ?>
         <?php endif; ?>
         <?= sidebarLink(url('profile'), 'fa-circle-user', 'My Profile', $currentPath, 'profile') ?>
 
@@ -824,6 +978,73 @@ function navGroup(string $id, string $icon, string $label, string $color, string
 <!-- MAIN CONTENT WRAPPER                                   -->
 <!-- ═══════════════════════════════════════════════════════ -->
 <div class="flex-1 flex flex-col overflow-hidden">
+
+    <?php if ($__subBar): ?>
+    <?php
+        $__ticketUrl = url('support/tickets');
+        if ($__subBar['type'] === 'countdown'):
+            $__d = $__subBar['days'];
+            // Colour: ≤3 days = red, 4-10 = amber
+            if ($__d <= 0) {
+                $__barBg  = 'bg-red-600';
+                $__barTxt = 'text-white';
+                $__btnCls = 'bg-white/20 hover:bg-white/30 text-white border border-white/30';
+                $__iconCls= 'text-red-200';
+                $__msg    = 'Your <strong>' . h($__subBar['plan']) . '</strong> plan has <strong>expired</strong>. Contact your admin to restore access.';
+                $__label  = 'Renew Now';
+            } elseif ($__d <= 3) {
+                $__barBg  = 'bg-red-500';
+                $__barTxt = 'text-white';
+                $__btnCls = 'bg-white/20 hover:bg-white/30 text-white border border-white/30';
+                $__iconCls= 'text-red-200';
+                $__msg    = 'Your <strong>' . h($__subBar['plan']) . '</strong> plan expires in <strong>' . $__d . ' day' . ($__d !== 1 ? 's' : '') . '</strong>. Act now to avoid losing access.';
+                $__label  = 'Contact Admin';
+            } else {
+                $__barBg  = 'bg-amber-500';
+                $__barTxt = 'text-white';
+                $__btnCls = 'bg-white/20 hover:bg-white/30 text-white border border-white/30';
+                $__iconCls= 'text-amber-200';
+                $__msg    = 'Your <strong>' . h($__subBar['plan']) . '</strong> plan expires in <strong>' . $__d . ' days</strong> (' . date('d M Y', strtotime($__subBar['expires'])) . '). Renew before then to avoid interruption.';
+                $__label  = 'Contact Admin';
+            }
+        endif;
+    ?>
+    <?php if ($__subBar['type'] === 'countdown'): ?>
+    <div class="<?= $__barBg ?> <?= $__barTxt ?> flex items-center gap-3 px-4 py-2 text-sm flex-shrink-0" style="min-height:38px;">
+        <i class="fa-solid fa-triangle-exclamation <?= $__iconCls ?> flex-shrink-0 text-sm"></i>
+        <span class="flex-1 leading-tight"><?= $__msg ?></span>
+        <a href="<?= $__ticketUrl ?>"
+           class="<?= $__btnCls ?> text-xs font-semibold px-3 py-1 rounded-lg flex-shrink-0 no-underline transition-colors">
+            <i class="fa-solid fa-headset mr-1"></i><?= $__label ?>
+        </a>
+        <button onclick="this.closest('div').remove()"
+                class="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity ml-1" aria-label="Dismiss">
+            <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+    </div>
+    <?php else:
+        // Build upgrade bar message depending on whether a higher plan exists
+        $__upMsg = $__subBar['next_plan']
+            ? 'You\'re on <strong>' . h($__subBar['plan']) . '</strong>. Upgrade to <strong>' . h($__subBar['next_plan']) . '</strong> to unlock more functionalities.'
+            : 'You\'re on <strong>' . h($__subBar['plan']) . '</strong>.'
+              . ($__subBar['expires'] ? ' Plan active until <strong>' . date('d M Y', strtotime($__subBar['expires'])) . '</strong>.' : '')
+              . ' Contact admin to manage your subscription.';
+        $__upBtn  = $__subBar['next_plan'] ? 'Contact Admin' : 'Contact Admin';
+    ?>
+    <div class="bg-blue-700 text-white flex items-center gap-3 px-4 py-2 text-sm flex-shrink-0" style="min-height:38px;">
+        <i class="fa-solid fa-<?= $__subBar['next_plan'] ? 'arrow-up-right-dots' : 'credit-card' ?> text-blue-300 flex-shrink-0 text-sm"></i>
+        <span class="flex-1 leading-tight"><?= $__upMsg ?></span>
+        <a href="<?= $__ticketUrl ?>"
+           class="bg-white/15 hover:bg-white/25 text-white border border-white/20 text-xs font-semibold px-3 py-1 rounded-lg flex-shrink-0 no-underline transition-colors whitespace-nowrap">
+            <i class="fa-solid fa-headset mr-1"></i><?= $__upBtn ?>
+        </a>
+        <button onclick="this.closest('div').remove()"
+                class="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity ml-1" aria-label="Dismiss">
+            <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+    </div>
+    <?php endif; ?>
+    <?php endif; ?>
 
     <!-- Top Bar -->
     <header class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between flex-shrink-0 shadow-sm">

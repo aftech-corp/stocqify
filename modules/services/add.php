@@ -99,7 +99,7 @@ include __DIR__ . '/../../app/includes/sidebar.php';
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Price (<?= CURRENCY_SYMBOL ?>)</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Price (<?= currencySymbol() ?>)</label>
                     <input type="number" name="price" id="price_field" value="<?= h($f['price'] ?? '0') ?>" min="0" step="0.01"
                         class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                     <p id="price_help" class="text-xs text-gray-400 mt-1 hidden">Set to 0 for custom-quoted services.</p>

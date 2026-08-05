@@ -592,6 +592,118 @@ CREATE TABLE IF NOT EXISTS `landing_contacts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
+-- SUPPLIERS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS `suppliers` (
+  `id`              INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  `business_id`     INT UNSIGNED  NOT NULL,
+  `name`            VARCHAR(200)  NOT NULL,
+  `phone`           VARCHAR(30)   DEFAULT NULL,
+  `email`           VARCHAR(100)  DEFAULT NULL,
+  `address`         TEXT          DEFAULT NULL,
+  `contact_person`  VARCHAR(150)  DEFAULT NULL,
+  `opening_balance` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+  `notes`           TEXT          DEFAULT NULL,
+  `is_active`       TINYINT(1)    NOT NULL DEFAULT 1,
+  `created_at`      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_sup_biz` (`business_id`),
+  CONSTRAINT `fk_sup_business` FOREIGN KEY (`business_id`) REFERENCES `businesses` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- SUPPLIER PURCHASES (Accounts Payable)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS `supplier_purchases` (
+  `id`             INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  `business_id`    INT UNSIGNED  NOT NULL,
+  `supplier_id`    INT UNSIGNED  NOT NULL,
+  `user_id`        INT UNSIGNED  NOT NULL,
+  `reference`      VARCHAR(100)  DEFAULT NULL,
+  `description`    VARCHAR(500)  NOT NULL,
+  `total_amount`   DECIMAL(15,2) NOT NULL,
+  `amount_paid`    DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+  `balance`        DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+  `payment_status` ENUM('unpaid','partial','paid') NOT NULL DEFAULT 'unpaid',
+  `purchase_date`  DATE          NOT NULL,
+  `due_date`       DATE          DEFAULT NULL,
+  `notes`          TEXT          DEFAULT NULL,
+  `created_at`     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_suppur_biz`  (`business_id`),
+  KEY `idx_suppur_sup`  (`supplier_id`),
+  KEY `idx_suppur_user` (`user_id`),
+  CONSTRAINT `fk_suppur_business` FOREIGN KEY (`business_id`) REFERENCES `businesses` (`id`),
+  CONSTRAINT `fk_suppur_supplier` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers`  (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_suppur_user`     FOREIGN KEY (`user_id`)     REFERENCES `users`      (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- SUPPLIER PAYMENTS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS `supplier_payments` (
+  `id`               INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  `business_id`      INT UNSIGNED  NOT NULL,
+  `supplier_id`      INT UNSIGNED  NOT NULL,
+  `purchase_id`      INT UNSIGNED  DEFAULT NULL,
+  `user_id`          INT UNSIGNED  NOT NULL,
+  `amount`           DECIMAL(15,2) NOT NULL,
+  `payment_method`   ENUM('cash','orange_money','afrimoney','qmoney','bank_transfer') NOT NULL DEFAULT 'cash',
+  `reference_number` VARCHAR(100)  DEFAULT NULL,
+  `notes`            TEXT          DEFAULT NULL,
+  `payment_date`     DATE          NOT NULL,
+  `created_at`       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_suppay_biz` (`business_id`),
+  KEY `idx_suppay_sup` (`supplier_id`),
+  KEY `idx_suppay_pur` (`purchase_id`),
+  CONSTRAINT `fk_suppay_business` FOREIGN KEY (`business_id`) REFERENCES `businesses`        (`id`),
+  CONSTRAINT `fk_suppay_supplier` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers`         (`id`),
+  CONSTRAINT `fk_suppay_purchase` FOREIGN KEY (`purchase_id`) REFERENCES `supplier_purchases`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- DRAWINGS (Owner Withdrawals)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS `drawings` (
+  `id`             INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  `business_id`    INT UNSIGNED  NOT NULL,
+  `user_id`        INT UNSIGNED  NOT NULL,
+  `amount`         DECIMAL(15,2) NOT NULL,
+  `description`    VARCHAR(300)  NOT NULL,
+  `payment_method` ENUM('cash','orange_money','afrimoney','qmoney','bank_transfer') NOT NULL DEFAULT 'cash',
+  `drawing_date`   DATE          NOT NULL,
+  `notes`          TEXT          DEFAULT NULL,
+  `created_at`     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_draw_biz`  (`business_id`),
+  KEY `idx_draw_user` (`user_id`),
+  CONSTRAINT `fk_draw_business` FOREIGN KEY (`business_id`) REFERENCES `businesses` (`id`),
+  CONSTRAINT `fk_draw_user`     FOREIGN KEY (`user_id`)     REFERENCES `users`      (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- CAPITAL ACCOUNTS (Opening Capital & Contributions)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS `capital_accounts` (
+  `id`          INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  `business_id` INT UNSIGNED  NOT NULL,
+  `user_id`     INT UNSIGNED  NOT NULL,
+  `type`        ENUM('opening','injection') NOT NULL DEFAULT 'opening',
+  `amount`      DECIMAL(15,2) NOT NULL,
+  `description` VARCHAR(300)  DEFAULT NULL,
+  `entry_date`  DATE          NOT NULL,
+  `notes`       TEXT          DEFAULT NULL,
+  `created_at`  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_cap_biz` (`business_id`),
+  CONSTRAINT `fk_cap_business` FOREIGN KEY (`business_id`) REFERENCES `businesses` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
 -- DEFAULT DATA
 -- ============================================================
 INSERT IGNORE INTO `roles` (`name`, `slug`, `permissions`) VALUES

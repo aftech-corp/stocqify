@@ -28,11 +28,133 @@ function renderComingSoon(string $title, string $icon = 'fa-clock', string $desc
     </div>";
 }
 
+function currencySymbol(): string {
+    return $_SESSION['business_currency'] ?? (defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'NLE');
+}
+
+function currentBranchId(): ?int {
+    return !empty($_SESSION['active_branch_id']) ? (int)$_SESSION['active_branch_id'] : null;
+}
+
+function currentBranchName(): string {
+    return $_SESSION['active_branch_name'] ?? 'All Branches';
+}
+
+function renderBranchBanner(): string {
+    $bid = currentBranchId();
+    if ($bid === null) return '';
+    $name = htmlspecialchars(currentBranchName(), ENT_QUOTES, 'UTF-8');
+    $csrf = htmlspecialchars(csrfToken(), ENT_QUOTES, 'UTF-8');
+    $action = url('branches/switch');
+    return '<div class="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 mb-4 text-sm text-blue-800">
+        <i class="fa-solid fa-code-branch text-blue-500 flex-shrink-0"></i>
+        <span>Showing <strong>' . $name . '</strong> branch records only.</span>
+        <form method="POST" action="' . $action . '" class="ml-auto flex-shrink-0">
+            <input type="hidden" name="csrf_token" value="' . $csrf . '">
+            <input type="hidden" name="branch_id" value="0">
+            <button type="submit" class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                <i class="fa-solid fa-xmark mr-1"></i>View all branches
+            </button>
+        </form>
+    </div>';
+}
+
+/**
+ * Check whether a business has hit a plan quota.
+ * Returns ['limit'=>int|null, 'count'=>int, 'reached'=>bool].
+ * limit===null means unlimited (no enforcement).
+ */
+function planLimitCheck(int $bizId, string $metric): array {
+    $allowed = ['max_branches','max_orders_per_month','max_products','max_customers','max_users'];
+    if (!in_array($metric, $allowed, true)) return ['limit'=>null,'count'=>0,'reached'=>false];
+    try {
+        $db = getDB();
+        $planQ = $db->prepare(
+            "SELECT sp.`{$metric}` FROM subscription_plans sp
+             JOIN business_subscriptions bs ON bs.plan_id = sp.id
+             WHERE bs.business_id = ? AND bs.status IN ('active','trial')
+             LIMIT 1"
+        );
+        $planQ->execute([$bizId]);
+        $row   = $planQ->fetch(PDO::FETCH_ASSOC);
+        $limit = ($row && $row[$metric] !== null) ? (int)$row[$metric] : null;
+        if ($limit === null) return ['limit'=>null,'count'=>0,'reached'=>false];
+        if ($metric === 'max_branches') {
+            $cQ = $db->prepare("SELECT COUNT(*) FROM branches WHERE business_id=? AND is_active=1");
+        } elseif ($metric === 'max_orders_per_month') {
+            $cQ = $db->prepare("SELECT COUNT(*) FROM sales WHERE business_id=? AND YEAR(sale_date)=YEAR(CURDATE()) AND MONTH(sale_date)=MONTH(CURDATE())");
+        } elseif ($metric === 'max_products') {
+            $cQ = $db->prepare("SELECT COUNT(*) FROM products WHERE business_id=? AND is_active=1");
+        } elseif ($metric === 'max_customers') {
+            $cQ = $db->prepare("SELECT COUNT(*) FROM customers WHERE business_id=? AND is_active=1");
+        } else {
+            $cQ = $db->prepare("SELECT COUNT(*) FROM users WHERE business_id=? AND is_active=1");
+        }
+        $cQ->execute([$bizId]);
+        $count = (int)$cQ->fetchColumn();
+        return ['limit'=>$limit,'count'=>$count,'reached'=>$count >= $limit];
+    } catch (\Exception $e) {
+        return ['limit'=>null,'count'=>0,'reached'=>false];
+    }
+}
+
+function featureStatus(string $key): string {
+    if (isAdmin()) return 'enabled';
+    $bizId = currentBusinessId();
+    if (!$bizId) return 'enabled';
+
+    static $userCache = [];
+    static $bizCache  = [];
+
+    // Check per-user overrides (set by business owner for their staff).
+    // Business owners have no user_feature_permissions rows, so they always fall through to business-level.
+    $userId = (int)(currentUser()['id'] ?? 0);
+    if ($userId && !array_key_exists($userId, $userCache)) {
+        try {
+            $q = getDB()->prepare("SELECT feature_key, status FROM user_feature_permissions WHERE user_id=?");
+            $q->execute([$userId]);
+            $userCache[$userId] = $q->fetchAll(\PDO::FETCH_KEY_PAIR);
+        } catch (\Throwable $e) { $userCache[$userId] = []; }
+    }
+    if ($userId && isset($userCache[$userId][$key])) {
+        return $userCache[$userId][$key];
+    }
+
+    // Fall back to business-level feature status.
+    if (!array_key_exists($bizId, $bizCache)) {
+        try {
+            $q = getDB()->prepare("SELECT feature_key, status FROM business_features WHERE business_id=?");
+            $q->execute([$bizId]);
+            $bizCache[$bizId] = $q->fetchAll(\PDO::FETCH_KEY_PAIR);
+        } catch (\Throwable $e) { $bizCache[$bizId] = []; }
+    }
+    return $bizCache[$bizId][$key] ?? 'enabled';
+}
+
+function requireFeature(string $key): void {
+    $status = featureStatus($key);
+    if ($status === 'disabled') {
+        flash('error', 'This feature is not enabled for your account. Contact your administrator.');
+        redirect(url('dashboard'));
+    }
+    if ($status === 'coming_soon') {
+        redirect(url('coming-soon') . '?feature=' . urlencode($key));
+    }
+}
+
+function countryDialCode(): string {
+    $code = $_SESSION['business_country'] ?? '';
+    if (!$code) return '';
+    static $dialMap = null;
+    if ($dialMap === null) {
+        require_once __DIR__ . '/countries.php';
+        $dialMap = array_column(countriesList(), 'dial', 'code');
+    }
+    return $dialMap[$code] ?? '';
+}
+
 function formatMoney(float $amount, string $symbol = null): string {
-    $sym = $symbol
-        ?? $_SESSION['business_currency']
-        ?? (defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'NLE');
-    return $sym . ' ' . number_format($amount, 2);
+    return ($symbol ?? currencySymbol()) . ' ' . number_format($amount, 2);
 }
 
 function formatDate(?string $date): string {

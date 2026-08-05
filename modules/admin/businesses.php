@@ -102,6 +102,10 @@ if (in_array($action, ['add', 'edit'])) {
                 $stmt = $db->prepare('INSERT INTO businesses (name,address,phone,email,currency,is_active,business_type,country) VALUES (?,?,?,?,?,?,?,?)');
                 $stmt->execute([$name, $address?:null, $phone?:null, $email?:null, $currency, $isActive, $businessType, $country?:null]);
                 $newId = (int)$db->lastInsertId();
+                // Auto-create Main Branch for the new business
+                try {
+                    $db->prepare("INSERT INTO branches (business_id, name, is_active) VALUES (?, 'Main Branch', 1)")->execute([$newId]);
+                } catch (\Throwable $e) {}
                 // Logo upload
                 if (!empty($_FILES['logo']['tmp_name']) && $_FILES['logo']['error'] === UPLOAD_ERR_OK) {
                     $logoPath = _uploadBizLogo($_FILES['logo'], $newId);
@@ -328,7 +332,8 @@ $stmt = $db->prepare("SELECT b.*,
     (SELECT COUNT(*) FROM users u WHERE u.business_id=b.id) AS user_count,
     (SELECT COUNT(*) FROM customers c WHERE c.business_id=b.id) AS customer_count,
     (SELECT COUNT(*) FROM sales s WHERE s.business_id=b.id) AS sale_count,
-    (SELECT COALESCE(SUM(s2.total_amount),0) FROM sales s2 WHERE s2.business_id=b.id) AS total_revenue
+    (SELECT COALESCE(SUM(s2.total_amount),0) FROM sales s2 WHERE s2.business_id=b.id) AS total_revenue,
+    (SELECT COUNT(*) FROM branches br WHERE br.business_id=b.id) AS branch_count
     FROM businesses b WHERE $where
     ORDER BY b.created_at DESC
     LIMIT {$pag['per_page']} OFFSET {$pag['offset']}");
@@ -368,6 +373,7 @@ include __DIR__ . '/../../app/includes/sidebar.php';
                 <tr>
                     <th class="px-4 py-3 font-medium text-left">Business</th>
                     <th class="px-4 py-3 font-medium text-center">Users</th>
+                    <th class="px-4 py-3 font-medium text-center">Branches</th>
                     <th class="px-4 py-3 font-medium text-center">Customers</th>
                     <th class="px-4 py-3 font-medium text-center">Sales</th>
                     <th class="px-4 py-3 font-medium text-right">Total Revenue</th>
@@ -377,7 +383,7 @@ include __DIR__ . '/../../app/includes/sidebar.php';
             </thead>
             <tbody class="divide-y">
                 <?php if (empty($businesses)): ?>
-                <tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">No businesses found.</td></tr>
+                <tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">No businesses found.</td></tr>
                 <?php else: ?>
                 <?php foreach ($businesses as $b): ?>
                 <tr class="hover:bg-gray-50">
@@ -398,6 +404,7 @@ include __DIR__ . '/../../app/includes/sidebar.php';
                         </div>
                     </td>
                     <td class="px-4 py-3 text-center font-medium"><?= number_format($b['user_count']) ?></td>
+                    <td class="px-4 py-3 text-center text-gray-500"><?= number_format($b['branch_count']) ?></td>
                     <td class="px-4 py-3 text-center text-gray-500"><?= number_format($b['customer_count']) ?></td>
                     <td class="px-4 py-3 text-center text-gray-500"><?= number_format($b['sale_count']) ?></td>
                     <td class="px-4 py-3 text-right font-semibold text-green-700"><?= formatMoney((float)$b['total_revenue'], $b['currency']) ?></td>

@@ -14,11 +14,12 @@ if (isPost()) {
     } else {
         $result = login($email, $password);
         if ($result['success']) {
-            // force_password_change is set in session by login()
             if (!empty($_SESSION['force_password_change'])) {
                 redirect(url('change-password'));
             }
-            redirect($_GET['redirect'] ?? url('dashboard'));
+            $loginRedirect = $_SESSION['login_redirect'] ?? url('dashboard');
+            unset($_SESSION['login_redirect']);
+            redirect($loginRedirect);
         } else {
             $error = $result['message'];
         }
@@ -30,7 +31,7 @@ if (isPost()) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign In | <?= h(APP_NAME) ?></title>
+    <title><?= h(APP_NAME) ?> | Sign In</title>
     <link rel="icon" type="image/png" href="<?= APP_LOGO ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
@@ -540,14 +541,14 @@ if (isPost()) {
     <p class="footer-note">Need access? Contact your system administrator.</p>
 
     <!-- Demo credentials -->
-    <div class="demo-box">
+    <!-- <div class="demo-box">
         <div class="demo-title">
             <i class="fa-solid fa-circle-info"></i> Demo Login Credentials
         </div>
         <div class="demo-row">Admin: <span class="demo-code">admin@sme.sl</span> / <span class="demo-code">password</span></div>
         <div class="demo-row">Owner: <span class="demo-code">owner@demo.sl</span> / <span class="demo-code">password</span></div>
         <div class="demo-warn">&#9888; Run setup.php first to initialize the database.</div>
-    </div>
+    </div> -->
 
     <div class="copyright">&copy; <?= date('Y') ?> <?= h(APP_NAME) ?> &middot; All rights reserved</div>
 </div>

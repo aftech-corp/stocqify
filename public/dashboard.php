@@ -9,9 +9,13 @@ $monthStart = date('Y-m-01');
 $monthEnd   = date('Y-m-t');
 
 function dbStat(PDO $db, string $sql, array $params = []): mixed {
-    $s = $db->prepare($sql);
-    $s->execute($params);
-    return $s->fetchColumn();
+    try {
+        $s = $db->prepare($sql);
+        $s->execute($params);
+        return $s->fetchColumn();
+    } catch (\Exception $e) {
+        return 0;
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -28,19 +32,23 @@ if (isAdmin()) {
     $loginsToday      = (int) dbStat($db, "SELECT COUNT(*) FROM users WHERE last_login >= ?", [$today]);
 
     // Recent businesses
-    $recentBizStmt = $db->query("SELECT b.name, b.email, b.is_active, b.created_at,
-        (SELECT COUNT(*) FROM users u2 WHERE u2.business_id=b.id) AS user_count
-        FROM businesses b ORDER BY b.created_at DESC LIMIT 8");
-    $recentBiz = $recentBizStmt->fetchAll();
+    try {
+        $recentBizStmt = $db->query("SELECT b.name, b.email, b.is_active, b.created_at,
+            (SELECT COUNT(*) FROM users u2 WHERE u2.business_id=b.id) AS user_count
+            FROM businesses b ORDER BY b.created_at DESC LIMIT 8");
+        $recentBiz = $recentBizStmt->fetchAll();
+    } catch (\Exception $e) { $recentBiz = []; }
 
     // Recent user registrations (non-admin)
-    $recentUsersStmt = $db->query("SELECT u.name, u.email, u.created_at, r.name AS role_name, b.name AS biz_name
-        FROM users u
-        JOIN roles r ON r.id=u.role_id
-        LEFT JOIN businesses b ON b.id=u.business_id
-        WHERE r.slug != 'admin'
-        ORDER BY u.created_at DESC LIMIT 6");
-    $recentUsers = $recentUsersStmt->fetchAll();
+    try {
+        $recentUsersStmt = $db->query("SELECT u.name, u.email, u.created_at, r.name AS role_name, b.name AS biz_name
+            FROM users u
+            JOIN roles r ON r.id=u.role_id
+            LEFT JOIN businesses b ON b.id=u.business_id
+            WHERE r.slug != 'admin'
+            ORDER BY u.created_at DESC LIMIT 6");
+        $recentUsers = $recentUsersStmt->fetchAll();
+    } catch (\Exception $e) { $recentUsers = []; }
 
     // Business registrations — last 6 months
     $chartLabels = [];
@@ -290,48 +298,56 @@ $lowStockCount  = (int) dbStat($db,
 $netProfit = $salesMonth - $expensesMonth;
 
 $sbf = bizFilter('s.business_id', $bizId);
-$recentSalesStmt = $db->prepare(
-    "SELECT s.id, s.invoice_number, s.total_amount, s.payment_status, s.sale_date,
-            c.name AS customer_name
-     FROM sales s
-     LEFT JOIN customers c ON c.id = s.customer_id
-     WHERE {$sbf['cond']}
-     ORDER BY s.created_at DESC
-     LIMIT 8");
-$recentSalesStmt->execute($sbf['params']);
-$recentSales = $recentSalesStmt->fetchAll();
+try {
+    $recentSalesStmt = $db->prepare(
+        "SELECT s.id, s.invoice_number, s.total_amount, s.payment_status, s.sale_date,
+                c.name AS customer_name
+         FROM sales s
+         LEFT JOIN customers c ON c.id = s.customer_id
+         WHERE {$sbf['cond']}
+         ORDER BY s.created_at DESC
+         LIMIT 8");
+    $recentSalesStmt->execute($sbf['params']);
+    $recentSales = $recentSalesStmt->fetchAll();
+} catch (\Exception $e) { $recentSales = []; }
 
-$lowStockStmt = $db->prepare(
-    "SELECT name, stock_quantity, reorder_level, unit
-     FROM products
-     WHERE {$bf['cond']} AND is_active = 1 AND stock_quantity <= reorder_level
-     ORDER BY stock_quantity ASC
-     LIMIT 6");
-$lowStockStmt->execute($bf['params']);
-$lowStockItems = $lowStockStmt->fetchAll();
+try {
+    $lowStockStmt = $db->prepare(
+        "SELECT name, stock_quantity, reorder_level, unit
+         FROM products
+         WHERE {$bf['cond']} AND is_active = 1 AND stock_quantity <= reorder_level
+         ORDER BY stock_quantity ASC
+         LIMIT 6");
+    $lowStockStmt->execute($bf['params']);
+    $lowStockItems = $lowStockStmt->fetchAll();
+} catch (\Exception $e) { $lowStockItems = []; }
 
 $pbf = bizFilter('p.business_id', $bizId);
-$recentPayStmt = $db->prepare(
-    "SELECT p.amount, p.payment_method, p.payment_date,
-            c.name AS customer_name
-     FROM payments p
-     LEFT JOIN customers c ON c.id = p.customer_id
-     WHERE {$pbf['cond']}
-     ORDER BY p.created_at DESC
-     LIMIT 5");
-$recentPayStmt->execute($pbf['params']);
-$recentPayments = $recentPayStmt->fetchAll();
+try {
+    $recentPayStmt = $db->prepare(
+        "SELECT p.amount, p.payment_method, p.payment_date,
+                c.name AS customer_name
+         FROM payments p
+         LEFT JOIN customers c ON c.id = p.customer_id
+         WHERE {$pbf['cond']}
+         ORDER BY p.created_at DESC
+         LIMIT 5");
+    $recentPayStmt->execute($pbf['params']);
+    $recentPayments = $recentPayStmt->fetchAll();
+} catch (\Exception $e) { $recentPayments = []; }
 
-$topCustStmt = $db->prepare(
-    "SELECT c.name, COUNT(s.id) AS sales_count, SUM(s.total_amount) AS total
-     FROM sales s
-     JOIN customers c ON c.id = s.customer_id
-     WHERE {$sbf['cond']} AND s.sale_date BETWEEN ? AND ?
-     GROUP BY c.id, c.name
-     ORDER BY total DESC
-     LIMIT 5");
-$topCustStmt->execute([...$sbf['params'], $monthStart, $monthEnd]);
-$topCustomers = $topCustStmt->fetchAll();
+try {
+    $topCustStmt = $db->prepare(
+        "SELECT c.name, COUNT(s.id) AS sales_count, SUM(s.total_amount) AS total
+         FROM sales s
+         JOIN customers c ON c.id = s.customer_id
+         WHERE {$sbf['cond']} AND s.sale_date BETWEEN ? AND ?
+         GROUP BY c.id, c.name
+         ORDER BY total DESC
+         LIMIT 5");
+    $topCustStmt->execute([...$sbf['params'], $monthStart, $monthEnd]);
+    $topCustomers = $topCustStmt->fetchAll();
+} catch (\Exception $e) { $topCustomers = []; }
 
 $chartLabels = [];
 $chartData   = [];

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../app/includes/auth.php';
 require_once __DIR__ . '/../../app/includes/functions.php';
 requirePermission('expenses');
+requireFeature('finance_expenses');
 
 $db    = getDB();
 $bizId = currentBusinessId();
@@ -15,6 +16,14 @@ $params = [$bizId];
 if ($from) { $where.=' AND e.expense_date>=?'; $params[]=$from; }
 if ($to)   { $where.=' AND e.expense_date<=?'; $params[]=$to; }
 if ($catId){ $where.=' AND e.category_id=?';   $params[]=$catId; }
+
+// Branch filter
+try { $db->exec("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS branch_id INT UNSIGNED DEFAULT NULL"); } catch (\Throwable $e) {}
+$__activeBranch = currentBranchId();
+if ($__activeBranch !== null) {
+    $where .= ' AND e.branch_id = ?';
+    $params[] = $__activeBranch;
+}
 
 $totalQ = $db->prepare("SELECT COUNT(*) FROM expenses e WHERE $where");
 $totalQ->execute($params);
@@ -48,6 +57,7 @@ include __DIR__ . '/../../app/includes/header.php';
 include __DIR__ . '/../../app/includes/sidebar.php';
 ?>
 
+<?= renderBranchBanner() ?>
 <div class="flex items-center justify-between mb-6">
     <div>
         <h2 class="text-xl font-bold text-gray-800">Expense Management</h2>

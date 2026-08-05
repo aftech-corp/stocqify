@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../app/includes/auth.php';
 require_once __DIR__ . '/../../app/includes/functions.php';
 requirePermission('reports');
+requireFeature('analytics_payment_report');
 
 
 $db    = getDB();

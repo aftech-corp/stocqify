@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../app/includes/auth.php';
 require_once __DIR__ . '/../../app/includes/functions.php';
 requirePermission('reports');
+requireFeature('analytics_financial_report');
 
 
 $db    = getDB();
@@ -9,30 +10,33 @@ $bizId = currentBusinessId();
 $from  = get('from', date('Y-m-01'));
 $to    = get('to', date('Y-m-d'));
 
-// Revenue from sales (amount collected in period)
-$salesRev = (float)$db->prepare("SELECT COALESCE(SUM(total_amount),0) FROM sales WHERE business_id=? AND sale_date BETWEEN ? AND ?")->execute([$bizId,$from,$to]) && ($q = $db->prepare("SELECT COALESCE(SUM(total_amount),0) FROM sales WHERE business_id=? AND sale_date BETWEEN ? AND ?")) && $q->execute([$bizId,$from,$to]) ? $q->fetchColumn() : 0;
-// Redo cleanly
-$q = $db->prepare("SELECT COALESCE(SUM(total_amount),0) FROM sales WHERE business_id=? AND sale_date BETWEEN ? AND ?"); $q->execute([$bizId,$from,$to]); $salesRev = (float)$q->fetchColumn();
-$q2 = $db->prepare("SELECT COALESCE(SUM(amount_paid),0) FROM sales WHERE business_id=? AND sale_date BETWEEN ? AND ?"); $q2->execute([$bizId,$from,$to]); $salesPaid = (float)$q2->fetchColumn();
-$q3 = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM income WHERE business_id=? AND income_date BETWEEN ? AND ?"); $q3->execute([$bizId,$from,$to]); $otherIncome = (float)$q3->fetchColumn();
-$q4 = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE business_id=? AND expense_date BETWEEN ? AND ?"); $q4->execute([$bizId,$from,$to]); $totalExpenses = (float)$q4->fetchColumn();
+// Branch filter
+$branchCond  = '';
+$branchParam = [];
+if (currentBranchId()) { $branchCond = ' AND branch_id = ?'; $branchParam = [currentBranchId()]; }
+$sBranchCond = $branchCond ? str_replace('branch_id','s.branch_id',$branchCond) : ''; // alias for JOINed queries
+
+$q = $db->prepare("SELECT COALESCE(SUM(total_amount),0) FROM sales WHERE business_id=? AND sale_date BETWEEN ? AND ?" . $branchCond); $q->execute([$bizId,$from,$to,...$branchParam]); $salesRev = (float)$q->fetchColumn();
+$q2 = $db->prepare("SELECT COALESCE(SUM(amount_paid),0) FROM sales WHERE business_id=? AND sale_date BETWEEN ? AND ?" . $branchCond); $q2->execute([$bizId,$from,$to,...$branchParam]); $salesPaid = (float)$q2->fetchColumn();
+$q3 = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM income WHERE business_id=? AND income_date BETWEEN ? AND ?" . $branchCond); $q3->execute([$bizId,$from,$to,...$branchParam]); $otherIncome = (float)$q3->fetchColumn();
+$q4 = $db->prepare("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE business_id=? AND expense_date BETWEEN ? AND ?" . $branchCond); $q4->execute([$bizId,$from,$to,...$branchParam]); $totalExpenses = (float)$q4->fetchColumn();
 
 // Cost of Goods Sold
-$q5 = $db->prepare("SELECT COALESCE(SUM(si.cost_price * si.quantity),0) FROM sale_items si JOIN sales s ON s.id=si.sale_id WHERE s.business_id=? AND s.sale_date BETWEEN ? AND ?"); $q5->execute([$bizId,$from,$to]); $cogs = (float)$q5->fetchColumn();
+$q5 = $db->prepare("SELECT COALESCE(SUM(si.cost_price * si.quantity),0) FROM sale_items si JOIN sales s ON s.id=si.sale_id WHERE s.business_id=? AND s.sale_date BETWEEN ? AND ?" . $sBranchCond); $q5->execute([$bizId,$from,$to,...$branchParam]); $cogs = (float)$q5->fetchColumn();
 
-$grossProfit    = $salesRev - $cogs;
-$totalIncome    = $salesRev + $otherIncome;
+$grossProfit     = $salesRev - $cogs;
+$totalIncome     = $salesRev + $otherIncome;
 $operatingProfit = $grossProfit - $totalExpenses;
 $netProfit       = $totalIncome - $cogs - $totalExpenses;
 
 // Expense breakdown by category
-$expByCatQ = $db->prepare("SELECT COALESCE(ec.name,'Uncategorized') AS cat, SUM(e.amount) AS total FROM expenses e LEFT JOIN expense_categories ec ON ec.id=e.category_id WHERE e.business_id=? AND e.expense_date BETWEEN ? AND ? GROUP BY ec.id ORDER BY total DESC");
-$expByCatQ->execute([$bizId,$from,$to]);
+$expByCatQ = $db->prepare("SELECT COALESCE(ec.name,'Uncategorized') AS cat, SUM(e.amount) AS total FROM expenses e LEFT JOIN expense_categories ec ON ec.id=e.category_id WHERE e.business_id=? AND e.expense_date BETWEEN ? AND ?" . $branchCond . " GROUP BY ec.id ORDER BY total DESC");
+$expByCatQ->execute([$bizId,$from,$to,...$branchParam]);
 $expByCat = $expByCatQ->fetchAll();
 
 // Monthly trend (last 6 months)
-$monthlyQ = $db->prepare("SELECT DATE_FORMAT(sale_date,'%Y-%m') AS month, SUM(total_amount) AS revenue, SUM(amount_paid) AS collected FROM sales WHERE business_id=? AND sale_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH) GROUP BY month ORDER BY month");
-$monthlyQ->execute([$bizId]);
+$monthlyQ = $db->prepare("SELECT DATE_FORMAT(sale_date,'%Y-%m') AS month, SUM(total_amount) AS revenue, SUM(amount_paid) AS collected FROM sales WHERE business_id=? AND sale_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)" . $branchCond . " GROUP BY month ORDER BY month");
+$monthlyQ->execute([$bizId,...$branchParam]);
 $monthly = $monthlyQ->fetchAll();
 
 $pageTitle = 'Financial Report (P&L)';
@@ -40,6 +44,7 @@ include __DIR__ . '/../../app/includes/header.php';
 include __DIR__ . '/../../app/includes/sidebar.php';
 ?>
 
+<?= renderBranchBanner() ?>
 <div class="flex items-center justify-between mb-6">
     <h2 class="text-xl font-bold text-gray-800">Profit & Loss Report</h2>
     <form method="GET" class="flex gap-2">

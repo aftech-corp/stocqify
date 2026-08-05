@@ -311,7 +311,7 @@ include __DIR__ . '/../../app/includes/sidebar.php';
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Amount Paid Now (<?= CURRENCY_SYMBOL ?>)</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Amount Paid Now (<?= currencySymbol() ?>)</label>
                         <input type="number" name="amount_paid" id="amount-paid" value="0" min="0" step="0.01"
                             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" oninput="recalculate()">
                     </div>
@@ -346,7 +346,7 @@ include __DIR__ . '/../../app/includes/sidebar.php';
 
 <script>
 var itemIdx = 0;
-var currency = '<?= CURRENCY_SYMBOL ?>';
+var currency = '<?= currencySymbol() ?>';
 
 function fmt(n) {
     return parseFloat(n || 0).toFixed(2);

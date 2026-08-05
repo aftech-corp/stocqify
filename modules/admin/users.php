@@ -4,10 +4,16 @@ require_once __DIR__ . '/../../app/includes/functions.php';
 require_once __DIR__ . '/../../app/includes/mail.php';
 requireLogin();
 
-// Ensure email verification table and user columns exist
+// Ensure email verification table, user columns, and user_feature_permissions table exist
 $__db2 = getDB();
 try { $__db2->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS force_password_change TINYINT NOT NULL DEFAULT 0"); } catch (\Exception $__e) {}
 try { $__db2->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at DATETIME DEFAULT NULL"); } catch (\Exception $__e) {}
+$__db2->exec("CREATE TABLE IF NOT EXISTS `user_feature_permissions` (
+    `user_id`     INT UNSIGNED NOT NULL,
+    `feature_key` VARCHAR(100) NOT NULL,
+    `status`      ENUM('enabled','disabled') NOT NULL DEFAULT 'enabled',
+    PRIMARY KEY (`user_id`, `feature_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 $__db2->exec("CREATE TABLE IF NOT EXISTS `email_verifications` (
     `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `user_id`    INT UNSIGNED NOT NULL,
@@ -47,6 +53,9 @@ if (isAdmin()) {
     $bizsQ = $db->query('SELECT id, name FROM businesses WHERE is_active=1 ORDER BY name');
     $bizOptions = $bizsQ->fetchAll();
 }
+
+// Load feature definitions for the access-control panel
+$allFeatureKeys = require APP_PATH . '/includes/feature_definitions.php';
 
 // ── Ownership guard: ensure $userId belongs to the current owner's business ──
 function assertOwnership(PDO $db, int $userId, ?int $ownerBizId): void {
@@ -101,6 +110,31 @@ if (in_array($action, ['add', 'edit'])) {
         $stmt = $db->prepare('SELECT * FROM users WHERE id=?');
         $stmt->execute([$userId]);
         $user_data = $stmt->fetch() ?: $user_data;
+    }
+
+    // Business features the plan currently allows (for the feature-access panel)
+    $planEnabledFeatures = [];
+    $existingUserPerms   = []; // feature_key => status for the user being edited
+    $showFeaturePanel    = false;
+
+    // Determine the target business id (may differ between admin vs owner context)
+    $targetBizId = $ownerBizId ?? (int)($user_data['business_id'] ?? 0);
+
+    if ($targetBizId) {
+        try {
+            $pfQ = $db->prepare("SELECT feature_key FROM business_features WHERE business_id=? AND status='enabled'");
+            $pfQ->execute([$targetBizId]);
+            $planEnabledFeatures = $pfQ->fetchAll(PDO::FETCH_COLUMN);
+        } catch (\Exception $__e) { $planEnabledFeatures = []; }
+
+        if ($action === 'edit' && $userId) {
+            try {
+                $upQ = $db->prepare("SELECT feature_key, status FROM user_feature_permissions WHERE user_id=?");
+                $upQ->execute([$userId]);
+                $existingUserPerms = $upQ->fetchAll(PDO::FETCH_KEY_PAIR);
+            } catch (\Exception $__e) { $existingUserPerms = []; }
+        }
+        $showFeaturePanel = !empty($planEnabledFeatures);
     }
 
     if (isPost()) {
@@ -211,6 +245,18 @@ if (in_array($action, ['add', 'edit'])) {
                 auditLog('update', 'users', $userId, [], ['name'=>$name,'email'=>$email]);
                 flash('success', "User '{$name}' updated successfully.");
             }
+
+            // Save per-user feature permissions when a business context exists
+            $__targetUid = $action === 'add' ? ($newUserId ?? 0) : $userId;
+            if ($__targetUid && !empty($planEnabledFeatures)) {
+                $db->prepare("DELETE FROM user_feature_permissions WHERE user_id=?")->execute([$__targetUid]);
+                $__fpStmt = $db->prepare("INSERT INTO user_feature_permissions (user_id, feature_key, status) VALUES (?,?,?)");
+                $__selectedFeatures = $_POST['user_features'] ?? [];
+                foreach ($planEnabledFeatures as $__fk) {
+                    $__fpStmt->execute([$__targetUid, $__fk, in_array($__fk, $__selectedFeatures) ? 'enabled' : 'disabled']);
+                }
+            }
+
             redirect(url('admin/users'));
         }
 
@@ -222,85 +268,178 @@ if (in_array($action, ['add', 'edit'])) {
     include __DIR__ . '/../../app/includes/header.php';
     include __DIR__ . '/../../app/includes/sidebar.php';
     ?>
-    <div class="max-w-2xl mx-auto">
+    <div>
         <div class="flex items-center gap-3 mb-6">
             <a href="users.php" class="text-gray-500 hover:text-gray-700"><i class="fa-solid fa-arrow-left"></i></a>
             <h2 class="text-xl font-bold text-gray-800"><?= $pageTitle ?></h2>
         </div>
+
         <?php if ($errors): ?>
         <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
             <?php foreach ($errors as $e): ?><p class="text-red-700 text-sm"><?= h($e) ?></p><?php endforeach; ?>
         </div>
         <?php endif; ?>
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <form method="POST">
-                <input type="hidden" name="csrf_token" value="<?= h(csrfToken()) ?>">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="md:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
-                        <input type="text" name="name" value="<?= h($user_data['name']) ?>" required
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="<?= h(csrfToken()) ?>">
+
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+                <!-- ── Left: Account Details ── -->
+                <div class="xl:col-span-2 space-y-6">
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                        <div class="flex items-center gap-2 mb-4 pb-2 border-b border-gray-100">
+                            <i class="fa-solid fa-user-circle text-gray-400 text-sm"></i>
+                            <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">Account Details</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
+                                <input type="text" name="name" value="<?= h($user_data['name']) ?>" required
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
+                                <input type="email" name="email" value="<?= h($user_data['email']) ?>" required
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                                <input type="text" name="phone" value="<?= h($user_data['phone'] ?? '') ?>"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="+232...">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Role *</label>
+                                <select name="role_id" id="roleSelect" required class="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">-- Select Role --</option>
+                                    <?php foreach ($roles as $r): ?>
+                                    <option value="<?= $r['id'] ?>" data-slug="<?= h($r['slug']) ?>" <?= ($user_data['role_id'] ?? '') == $r['id'] ? 'selected' : '' ?>><?= h($r['name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <?php if (isAdmin()): ?>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Business</label>
+                                <select name="business_id" class="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">-- No Business (Admin Only) --</option>
+                                    <?php foreach ($bizOptions as $b): ?>
+                                    <option value="<?= $b['id'] ?>" <?= ($user_data['business_id'] ?? '') == $b['id'] ? 'selected' : '' ?>><?= h($b['name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <?php else: ?>
+                            <input type="hidden" name="business_id" value="<?= $ownerBizId ?>">
+                            <?php endif; ?>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Password<?= $action === 'edit' ? ' <span class="font-normal text-gray-400">(leave blank to keep current)</span>' : ' *' ?></label>
+                                <input type="password" name="password" autocomplete="new-password"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    placeholder="<?= $action === 'edit' ? 'Leave blank to keep current' : 'Min. 6 characters' ?>">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                                <input type="password" name="confirm_password" autocomplete="new-password"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    placeholder="Repeat password">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" name="is_active" value="1" <?= $user_data['is_active'] ? 'checked' : '' ?> class="w-4 h-4 rounded text-blue-600">
+                                    <span class="text-sm font-medium text-gray-700">Account Active</span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
-                        <input type="email" name="email" value="<?= h($user_data['email']) ?>" required
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                        <input type="text" name="phone" value="<?= h($user_data['phone'] ?? '') ?>"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="+232...">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Role *</label>
-                        <select name="role_id" required class="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 outline-none">
-                            <option value="">-- Select Role --</option>
-                            <?php foreach ($roles as $r): ?>
-                            <option value="<?= $r['id'] ?>" <?= ($user_data['role_id'] ?? '') == $r['id'] ? 'selected' : '' ?>><?= h($r['name']) ?></option>
+                </div>
+
+                <!-- ── Right: Feature Access ── -->
+                <div class="xl:col-span-1">
+                    <?php if ($showFeaturePanel): ?>
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 xl:sticky xl:top-6" id="featurePanel">
+                        <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
+                            <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                                <i class="fa-solid fa-shield-halved mr-1"></i> Feature Access
+                            </span>
+                            <div class="flex gap-2">
+                                <button type="button" onclick="setAllFeatures(true)" class="text-xs text-blue-600 hover:text-blue-800">All</button>
+                                <span class="text-gray-300">|</span>
+                                <button type="button" onclick="setAllFeatures(false)" class="text-xs text-gray-500 hover:text-gray-700">None</button>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-400 mb-3 leading-relaxed">
+                            Control which features this user can access. Only features included in your current plan are shown.
+                        </p>
+                        <?php
+                        // Group plan-enabled features by section for display
+                        $panelSections = [];
+                        foreach ($allFeatureKeys as $fk => $fm) {
+                            if (in_array($fk, $planEnabledFeatures)) {
+                                $panelSections[$fm['section']][$fk] = $fm;
+                            }
+                        }
+                        foreach ($panelSections as $sectionName => $sectionFeatures):
+                        ?>
+                        <div class="mb-4">
+                            <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5"><?= h($sectionName) ?></p>
+                            <div class="space-y-1">
+                            <?php foreach ($sectionFeatures as $fk => $fm):
+                                // Default: enabled (all features on) for new users; use saved perm for existing
+                                $isChecked = empty($existingUserPerms)
+                                    ? true
+                                    : (($existingUserPerms[$fk] ?? 'enabled') === 'enabled');
+                                // On POST validation failure, respect what was submitted
+                                if (isPost()) $isChecked = in_array($fk, $_POST['user_features'] ?? []);
+                            ?>
+                            <label class="flex items-center gap-2 cursor-pointer py-0.5 group">
+                                <input type="checkbox" name="user_features[]" value="<?= h($fk) ?>"
+                                    class="feat-cb w-3.5 h-3.5 rounded text-blue-600 flex-shrink-0"
+                                    <?= $isChecked ? 'checked' : '' ?>>
+                                <span class="text-xs text-gray-600 group-hover:text-gray-900 leading-tight"><?= h($fm['label']) ?></span>
+                            </label>
                             <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <?php if (isAdmin()): ?>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Business</label>
-                        <select name="business_id" class="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 outline-none">
-                            <option value="">-- No Business (Admin Only) --</option>
-                            <?php foreach ($bizOptions as $b): ?>
-                            <option value="<?= $b['id'] ?>" <?= ($user_data['business_id'] ?? '') == $b['id'] ? 'selected' : '' ?>><?= h($b['name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                        <?php if (empty($panelSections)): ?>
+                        <p class="text-xs text-gray-400 italic text-center py-4">No features available.<br>Contact your admin to configure your plan.</p>
+                        <?php endif; ?>
                     </div>
                     <?php else: ?>
-                    <input type="hidden" name="business_id" value="<?= $ownerBizId ?>">
+                    <div class="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-5 text-center">
+                        <i class="fa-solid fa-shield-halved text-2xl text-gray-300 mb-2 block"></i>
+                        <p class="text-xs text-gray-400 leading-relaxed">Feature access controls will appear here once this user is assigned to a business with an active plan.</p>
+                    </div>
                     <?php endif; ?>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Password <?= $action === 'edit' ? '(leave blank to keep current)' : ' *' ?></label>
-                        <input type="password" name="password" autocomplete="new-password"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                            placeholder="<?= $action === 'edit' ? 'Leave blank to keep current' : 'Min. 6 characters' ?>">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
-                        <input type="password" name="confirm_password" autocomplete="new-password"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                            placeholder="Repeat password">
-                    </div>
-                    <div class="md:col-span-2">
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" name="is_active" value="1" <?= $user_data['is_active'] ? 'checked' : '' ?> class="w-4 h-4 rounded text-blue-600">
-                            <span class="text-sm font-medium text-gray-700">Account Active</span>
-                        </label>
-                    </div>
                 </div>
-                <div class="flex gap-3 mt-6">
-                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
-                        <i class="fa-solid fa-save mr-1"></i> <?= $action === 'add' ? 'Create User' : 'Save Changes' ?>
-                    </button>
-                    <a href="users.php" class="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg text-sm font-medium hover:bg-gray-200">Cancel</a>
-                </div>
-            </form>
-        </div>
+
+            </div><!-- /grid -->
+
+            <div class="flex gap-3 mt-6">
+                <button type="submit" class="bg-blue-600 text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700">
+                    <i class="fa-solid fa-save mr-1"></i> <?= $action === 'add' ? 'Create User' : 'Save Changes' ?>
+                </button>
+                <a href="users.php" class="bg-gray-100 text-gray-700 px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-200">Cancel</a>
+            </div>
+        </form>
     </div>
+
+    <script>
+    function setAllFeatures(checked) {
+        document.querySelectorAll('.feat-cb').forEach(cb => cb.checked = checked);
+    }
+    // Hide feature panel for business-owner role (owners always get full access)
+    const roleSelect = document.getElementById('roleSelect');
+    const featurePanel = document.getElementById('featurePanel');
+    if (roleSelect && featurePanel) {
+        function togglePanel() {
+            const slug = roleSelect.options[roleSelect.selectedIndex]?.dataset?.slug || '';
+            featurePanel.style.opacity = (slug === 'owner') ? '0.4' : '1';
+            featurePanel.querySelectorAll('input[type=checkbox]').forEach(cb => cb.disabled = (slug === 'owner'));
+        }
+        roleSelect.addEventListener('change', togglePanel);
+        togglePanel();
+    }
+    </script>
     <?php
     include __DIR__ . '/../../app/includes/footer.php';
     exit;

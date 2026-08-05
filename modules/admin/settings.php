@@ -113,43 +113,56 @@ if (get('action') === 'delcurrency' && get('code')) {
     redirect(url('admin/settings') . '?tab=currencies');
 }
 
-// ==================== SAVE FEATURES ====================
-if (isPost() && post('_tab') === 'features') {
-    verifyCsrf();
-    $fBizId = (int)post('features_biz_id');
-    if ($fBizId) {
-        $upsertF = $db->prepare("INSERT INTO business_features (business_id, feature_key, status) VALUES (?,?,?)
-                                 ON DUPLICATE KEY UPDATE status=VALUES(status)");
-        $allKeys = _allFeatureKeys();
-        foreach ($allKeys as $key => $meta) {
-            $val = post('feat_' . $key);
-            if (in_array($val, ['enabled','disabled','coming_soon'])) {
-                $upsertF->execute([$fBizId, $key, $val]);
-            }
+// ==================== AJAX: TOGGLE SINGLE FEATURE ====================
+if (isPost() && post('_tab') === 'feature_toggle') {
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+        verifyCsrf();
+        $ajaxBizId = (int)($_POST['biz_id'] ?? 0);
+        $ajaxKey   = preg_replace('/[^a-z_]/', '', $_POST['key'] ?? '');
+        $ajaxSt    = $_POST['status'] ?? '';
+        if ($ajaxBizId < 1 || !$ajaxKey || !in_array($ajaxSt, ['enabled','disabled','coming_soon'])) {
+            echo json_encode(['ok' => false, 'error' => 'Invalid input']);
+        } else {
+            $db->prepare("INSERT INTO business_features (business_id, feature_key, status) VALUES (?,?,?)
+                         ON DUPLICATE KEY UPDATE status=VALUES(status)")
+               ->execute([$ajaxBizId, $ajaxKey, $ajaxSt]);
+            echo json_encode(['ok' => true]);
         }
-        flash('success', 'Feature settings saved.');
-        redirect(url('admin/settings') . '?tab=features&biz=' . $fBizId);
+    } catch (\Throwable $e) {
+        echo json_encode(['ok' => false, 'error' => 'Server error']);
     }
-    $activeTab = 'features';
+    exit;
 }
 
 function _allFeatureKeys(): array {
     return [
+        // Sales & Commerce
+        'sales_pos'                  => ['label' => 'Sales & POS',           'section' => 'Sales & Commerce'],
+        'sales_customers'            => ['label' => 'Customer Management',   'section' => 'Sales & Commerce'],
+        'finance_debts'              => ['label' => 'Debts & Credit Sales',  'section' => 'Sales & Commerce'],
+        'finance_payments'           => ['label' => 'Debt Payments',         'section' => 'Sales & Commerce'],
         // Finance
-        'finance_debts'              => ['label' => 'Debts',             'section' => 'Finance'],
-        'finance_payments'           => ['label' => 'Payments',          'section' => 'Finance'],
-        'finance_expenses'           => ['label' => 'Expenses',          'section' => 'Finance'],
-        'finance_income'             => ['label' => 'Income',            'section' => 'Finance'],
-        // Analytics — product businesses
-        'analytics_sales_report'     => ['label' => 'Sales Report',      'section' => 'Analytics'],
-        'analytics_financial_report' => ['label' => 'Financial Report',  'section' => 'Analytics'],
-        'analytics_inventory_report' => ['label' => 'Inventory Report',  'section' => 'Analytics'],
-        'analytics_debt_report'      => ['label' => 'Debt Report',       'section' => 'Analytics'],
-        'analytics_payment_report'   => ['label' => 'Payment Report',    'section' => 'Analytics'],
-        'analytics_customer_report'  => ['label' => 'Customer Report',   'section' => 'Analytics'],
-        'analytics_smart_alerts'     => ['label' => 'Smart Alerts',      'section' => 'Analytics'],
-        // Analytics — service businesses
-        'analytics_revenue_report'   => ['label' => 'Revenue Report',    'section' => 'Analytics (Service)'],
+        'finance_expenses'           => ['label' => 'Expenses',              'section' => 'Finance'],
+        'finance_income'             => ['label' => 'Income',                'section' => 'Finance'],
+        'finance_drawings'           => ['label' => 'Owner Drawings',        'section' => 'Finance'],
+        // Inventory
+        'inventory_products'         => ['label' => 'Products & Inventory',  'section' => 'Inventory'],
+        'inventory_adjustments'      => ['label' => 'Stock Adjustments',     'section' => 'Inventory'],
+        // Branches
+        'branches_management'        => ['label' => 'Branch Management',     'section' => 'Branches'],
+        // Analytics
+        'analytics_sales_report'     => ['label' => 'Sales Report',          'section' => 'Analytics'],
+        'analytics_financial_report' => ['label' => 'Financial Report (P&L)','section' => 'Analytics'],
+        'analytics_inventory_report' => ['label' => 'Inventory Report',      'section' => 'Analytics'],
+        'analytics_debt_report'      => ['label' => 'Debt Report',           'section' => 'Analytics'],
+        'analytics_payment_report'   => ['label' => 'Payment Report',        'section' => 'Analytics'],
+        'analytics_customer_report'  => ['label' => 'Customer Report',       'section' => 'Analytics'],
+        'analytics_revenue_report'   => ['label' => 'Revenue Report',        'section' => 'Analytics'],
+        'analytics_balance_sheet'    => ['label' => 'Balance Sheet',         'section' => 'Analytics'],
+        'analytics_smart_alerts'     => ['label' => 'Smart Alerts',          'section' => 'Analytics'],
+        // Support
+        'support_tickets'            => ['label' => 'Support Tickets',       'section' => 'Support'],
     ];
 }
 
@@ -180,8 +193,11 @@ function _dangerCategories(): array {
         'sales'         => ['label' => 'Sales & Invoices',         'tables' => ['sale_items', 'sales'],                                     'icon' => 'fa-chart-line',    'desc' => 'All sale records and line items'],
         'debts'         => ['label' => 'Debts & Payments',         'tables' => ['debt_payments', 'debts', 'payments'],                      'icon' => 'fa-coins',         'desc' => 'Debt records and payment history'],
         'finance'       => ['label' => 'Expenses & Income',        'tables' => ['expenses', 'income'],                                      'icon' => 'fa-wallet',        'desc' => 'Expense and income entries'],
+        'drawings'      => ['label' => 'Owner Drawings',           'tables' => ['drawings'],                                                'icon' => 'fa-money-bill-wave','desc' => 'Owner withdrawal / drawing records'],
         'customers'     => ['label' => 'Customers',                'tables' => ['customers'],                                               'icon' => 'fa-users',         'desc' => 'Customer directory'],
         'products'      => ['label' => 'Products & Categories',    'tables' => ['products', 'categories'],                                  'icon' => 'fa-box',           'desc' => 'Product catalogue and categories'],
+        'inventory'     => ['label' => 'Inventory Log',            'tables' => ['inventory_transactions'],                                  'icon' => 'fa-warehouse',     'desc' => 'Stock adjustment and purchase history'],
+        'branches'      => ['label' => 'Branch Data',              'tables' => ['branches'],                                                'icon' => 'fa-code-branch',   'desc' => 'Branch records (Main Branch re-created on next visit)'],
         'support'       => ['label' => 'Support Tickets',          'tables' => ['support_replies', 'support_tickets'],                      'icon' => 'fa-headset',       'desc' => 'All support tickets and replies'],
         'notifications' => ['label' => 'Notifications',            'tables' => ['notifications'],                                           'icon' => 'fa-bell',          'desc' => 'In-app notification history'],
         'businesses'    => ['label' => 'Businesses',               'tables' => ['businesses'],                                              'icon' => 'fa-building',      'desc' => 'Business accounts'],
@@ -207,6 +223,20 @@ if (isPost() && post('_tab') === 'general') {
     }
     flash('success', 'General settings saved successfully.');
     redirect(url('admin/settings') . '?tab=general');
+}
+
+// ==================== SAVE DEMO FEE ====================
+if (isPost() && post('_tab') === 'demo') {
+    verifyCsrf();
+    $demoFields = ['demo_fee_enabled','demo_fee_amount','demo_fee_currency','demo_payment_instructions'];
+    $upsertD = $db->prepare("INSERT INTO system_settings (`key`,`value`) VALUES (?,?)
+                             ON DUPLICATE KEY UPDATE `value`=VALUES(`value`)");
+    $upsertD->execute(['demo_fee_enabled',  post('demo_fee_enabled') === '1' ? '1' : '0']);
+    $upsertD->execute(['demo_fee_amount',   trim((string)(post('demo_fee_amount') ?? ''))]);
+    $upsertD->execute(['demo_fee_currency', trim((string)(post('demo_fee_currency') ?? ''))]);
+    $upsertD->execute(['demo_payment_instructions', trim((string)(post('demo_payment_instructions') ?? ''))]);
+    flash('success', 'Demo fee settings saved.');
+    redirect(url('admin/settings') . '?tab=demo');
 }
 
 // ==================== CLEAR SELECTED DATA ====================
@@ -286,6 +316,11 @@ include __DIR__ . '/../../app/includes/sidebar.php';
        class="px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors
               <?= $activeTab === 'general' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
         <i class="fa-solid fa-sliders mr-1.5"></i> General
+    </a>
+    <a href="settings.php?tab=demo"
+       class="px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors
+              <?= $activeTab === 'demo' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700' ?>">
+        <i class="fa-solid fa-calendar-check mr-1.5"></i> Demo Fee
     </a>
     <a href="settings.php?tab=danger"
        class="ml-auto px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors
@@ -583,7 +618,6 @@ include __DIR__ . '/../../app/includes/sidebar.php';
 $featBizId  = (int)get('biz', 0);
 $allBizList = $db->query("SELECT id, name FROM businesses WHERE is_active=1 ORDER BY name")->fetchAll();
 
-// Load current feature statuses for selected business
 $curFeats = [];
 if ($featBizId) {
     $cfStmt = $db->prepare("SELECT feature_key, status FROM business_features WHERE business_id=?");
@@ -592,23 +626,78 @@ if ($featBizId) {
 }
 $allFeatureKeys = _allFeatureKeys();
 
-// Group by section
 $featSections = [];
 foreach ($allFeatureKeys as $key => $meta) {
     $featSections[$meta['section']][$key] = $meta['label'];
 }
+
+$__sectionIconMap = [
+    'Sales & Commerce' => 'fa-shopping-cart text-blue-500',
+    'Finance'          => 'fa-coins text-pink-500',
+    'Inventory'        => 'fa-boxes-stacked text-orange-500',
+    'Branches'         => 'fa-code-branch text-teal-500',
+    'Analytics'        => 'fa-chart-line text-purple-500',
+    'Support'          => 'fa-headset text-indigo-500',
+];
 ?>
+<style>
+/* Fix the page scroll entirely — features tab manages its own scroll internally */
+html, body { overflow: hidden !important; }
+main {
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+#feat-outer {
+    flex: 1 1 0;
+    min-height: 0; /* allow flex child to shrink below content size */
+    display: flex;
+    gap: 24px;
+    overflow: hidden;
+}
+#feat-left {
+    width: 256px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+#feat-right {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    padding-right: 2px;
+}
+#feat-right::-webkit-scrollbar,
+#feat-left::-webkit-scrollbar  { width: 4px; }
+#feat-right::-webkit-scrollbar-track,
+#feat-left::-webkit-scrollbar-track  { background: transparent; }
+#feat-right::-webkit-scrollbar-thumb,
+#feat-left::-webkit-scrollbar-thumb  { background: #d1d5db; border-radius: 2px; }
 
-<div class="flex flex-col lg:flex-row gap-6">
+.feat-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    cursor: pointer; border: none; background: none;
+    transition: background .12s, color .12s, opacity .12s;
+}
+.feat-btn:disabled { opacity: .5; cursor: wait; }
+.feat-off             { background: #f3f4f6; color: #9ca3af; }
+.feat-off:hover       { background: #e5e7eb; color: #6b7280; }
+.feat-enabled-active  { background: #d1fae5; color: #059669; }
+.feat-soon-active     { background: #fef3c7; color: #d97706; }
+.feat-disabled-active { background: #fee2e2; color: #dc2626; }
+</style>
 
-    <!-- Business Selector -->
-    <div class="lg:w-64 flex-shrink-0">
+<div id="feat-outer">
+
+    <!-- ── Left: Business Selector ──────────────────────────── -->
+    <div id="feat-left">
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
             <h4 class="font-semibold text-gray-700 text-sm mb-2">Select Business</h4>
             <?php if (empty($allBizList)): ?>
             <p class="text-sm text-gray-400">No active businesses found.</p>
             <?php else: ?>
-            <!-- Search input -->
             <div class="relative mb-3">
                 <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
                 <input type="text" id="feat-biz-search" placeholder="Search business…"
@@ -628,8 +717,8 @@ foreach ($allFeatureKeys as $key => $meta) {
             </div>
             <script>
             document.getElementById('feat-biz-search')?.addEventListener('input', function() {
-                const q    = this.value.toLowerCase().trim();
-                let   hits = 0;
+                const q = this.value.toLowerCase().trim();
+                let hits = 0;
                 document.querySelectorAll('.feat-biz-item').forEach(el => {
                     const show = !q || el.dataset.name.includes(q);
                     el.style.display = show ? '' : 'none';
@@ -642,8 +731,8 @@ foreach ($allFeatureKeys as $key => $meta) {
         </div>
     </div>
 
-    <!-- Feature Toggles -->
-    <div class="flex-1">
+    <!-- ── Right: Feature Panels (auto-saves on each toggle click) ── -->
+    <div id="feat-right">
         <?php if (!$featBizId): ?>
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-16 text-center">
             <div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -654,96 +743,143 @@ foreach ($allFeatureKeys as $key => $meta) {
         </div>
         <?php else: ?>
         <?php $selBiz = array_values(array_filter($allBizList, fn($b) => (int)$b['id'] === $featBizId))[0] ?? null; ?>
-        <div class="mb-4 flex items-center gap-3">
-            <div class="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <i class="fa-solid fa-building text-blue-600"></i>
+        <div class="mb-4 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-building text-blue-600"></i>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-gray-800"><?= h($selBiz['name'] ?? '') ?></h3>
+                    <p class="text-xs text-gray-400">Changes save automatically when you click a toggle</p>
+                </div>
             </div>
-            <div>
-                <h3 class="font-semibold text-gray-800"><?= h($selBiz['name'] ?? '') ?></h3>
-                <p class="text-xs text-gray-400">Toggle feature access for this business</p>
+            <div id="feat-status" class="text-xs text-gray-400 flex items-center gap-1.5">
+                <i class="fa-solid fa-circle-check text-gray-300"></i> Ready
             </div>
         </div>
 
-        <form method="POST">
-            <input type="hidden" name="csrf_token"    value="<?= h(csrfToken()) ?>">
-            <input type="hidden" name="_tab"          value="features">
-            <input type="hidden" name="features_biz_id" value="<?= $featBizId ?>">
-
-            <div class="space-y-5">
-                <?php foreach ($featSections as $section => $keys): ?>
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div class="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
-                        <i class="fa-solid <?= $section === 'Finance' ? 'fa-coins text-pink-500' : 'fa-chart-line text-purple-500' ?> text-sm"></i>
-                        <h4 class="font-semibold text-gray-700 text-sm"><?= h($section) ?></h4>
-                    </div>
-                    <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <?php foreach ($keys as $key => $label):
-                            $cur = $curFeats[$key] ?? 'enabled';
-                        ?>
-                        <div class="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50/50">
-                            <span class="text-sm font-medium text-gray-700"><?= h($label) ?></span>
-                            <div class="flex gap-1 flex-shrink-0">
-                                <label class="feat-btn <?= $cur === 'enabled' ? 'feat-enabled-active' : 'feat-off' ?>" title="Enabled">
-                                    <input type="radio" name="feat_<?= $key ?>" value="enabled" <?= $cur === 'enabled' ? 'checked' : '' ?> class="sr-only">
-                                    <i class="fa-solid fa-circle-check text-xs"></i> On
-                                </label>
-                                <label class="feat-btn <?= $cur === 'coming_soon' ? 'feat-soon-active' : 'feat-off' ?>" title="Coming Soon">
-                                    <input type="radio" name="feat_<?= $key ?>" value="coming_soon" <?= $cur === 'coming_soon' ? 'checked' : '' ?> class="sr-only">
-                                    <i class="fa-solid fa-clock text-xs"></i> Soon
-                                </label>
-                                <label class="feat-btn <?= $cur === 'disabled' ? 'feat-disabled-active' : 'feat-off' ?>" title="Disabled">
-                                    <input type="radio" name="feat_<?= $key ?>" value="disabled" <?= $cur === 'disabled' ? 'checked' : '' ?> class="sr-only">
-                                    <i class="fa-solid fa-ban text-xs"></i> Off
-                                </label>
-                            </div>
-                        </div>
-                        <?php endforeach; ?>
-                    </div>
+        <div class="space-y-5" id="feat-sections">
+            <?php foreach ($featSections as $section => $keys):
+                $sectionIcon = $__sectionIconMap[$section] ?? 'fa-circle-dot text-gray-400';
+            ?>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                    <i class="fa-solid <?= $sectionIcon ?> text-sm"></i>
+                    <h4 class="font-semibold text-gray-700 text-sm"><?= h($section) ?></h4>
+                    <span class="ml-auto text-xs text-gray-400"><?= count($keys) ?> feature<?= count($keys) !== 1 ? 's' : '' ?></span>
                 </div>
-                <?php endforeach; ?>
+                <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <?php foreach ($keys as $key => $label):
+                        $cur = $curFeats[$key] ?? 'enabled';
+                    ?>
+                    <div class="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50/50 hover:border-gray-200 transition-colors">
+                        <span class="text-sm font-medium text-gray-700 truncate"><?= h($label) ?></span>
+                        <div class="flex gap-1 flex-shrink-0 feat-toggle-group"
+                             data-biz="<?= $featBizId ?>"
+                             data-key="<?= h($key) ?>"
+                             data-current="<?= h($cur) ?>">
+                            <button type="button" class="feat-btn <?= $cur === 'enabled'     ? 'feat-enabled-active'  : 'feat-off' ?>" data-val="enabled">
+                                <i class="fa-solid fa-circle-check text-xs"></i> On
+                            </button>
+                            <button type="button" class="feat-btn <?= $cur === 'coming_soon' ? 'feat-soon-active'     : 'feat-off' ?>" data-val="coming_soon">
+                                <i class="fa-solid fa-clock text-xs"></i> Soon
+                            </button>
+                            <button type="button" class="feat-btn <?= $cur === 'disabled'    ? 'feat-disabled-active' : 'feat-off' ?>" data-val="disabled">
+                                <i class="fa-solid fa-ban text-xs"></i> Off
+                            </button>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
             </div>
+            <?php endforeach; ?>
+        </div>
 
-            <div class="mt-5 flex gap-3">
-                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
-                    <i class="fa-solid fa-save mr-1"></i> Save Feature Settings
-                </button>
-                <a href="settings.php?tab=features&biz=<?= $featBizId ?>"
-                   class="bg-gray-100 text-gray-600 px-5 py-2 rounded-lg text-sm hover:bg-gray-200">Reset</a>
-            </div>
-        </form>
+        <div class="mt-4 pb-6 text-xs text-gray-400 flex items-center gap-2">
+            <i class="fa-solid fa-bolt"></i> Each toggle saves instantly to the database — no save button needed.
+        </div>
 
-        <style>
-        .feat-btn {
-            display: inline-flex; align-items: center; gap: 4px;
-            padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
-            cursor: pointer; transition: background .15s, color .15s;
-        }
-        .feat-off           { background: #f3f4f6; color: #9ca3af; }
-        .feat-off:hover     { background: #e5e7eb; color: #6b7280; }
-        .feat-enabled-active  { background: #d1fae5; color: #059669; }
-        .feat-soon-active     { background: #fef3c7; color: #d97706; }
-        .feat-disabled-active { background: #fee2e2; color: #dc2626; }
-        .feat-btn input[type=radio]:focus + * { outline: none; }
-        /* live preview: re-style on change via JS */
-        </style>
         <script>
-        document.querySelectorAll('.feat-btn input[type=radio]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                const group = this.closest('.flex.gap-1');
+        (function() {
+            const CSRF  = <?= json_encode(csrfToken()) ?>;
+            const URL   = <?= json_encode(url('admin/settings')) ?>;
+            const CLASS = { enabled: 'feat-enabled-active', coming_soon: 'feat-soon-active', disabled: 'feat-disabled-active' };
+            const statusEl = document.getElementById('feat-status');
+
+            function setStatus(msg, color) {
+                statusEl.innerHTML = `<i class="fa-solid fa-${color === 'green' ? 'circle-check text-green-500' : color === 'red' ? 'triangle-exclamation text-red-500' : 'spinner fa-spin text-blue-400'}"></i> ${msg}`;
+            }
+
+            let toastTimer;
+            function showToast(msg, isErr) {
+                let t = document.getElementById('feat-toast');
+                if (!t) {
+                    t = document.createElement('div');
+                    t.id = 'feat-toast';
+                    t.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.12);transition:opacity .25s;pointer-events:none;';
+                    document.body.appendChild(t);
+                }
+                t.textContent = msg;
+                t.style.background = isErr ? '#fee2e2' : '#d1fae5';
+                t.style.color      = isErr ? '#dc2626' : '#059669';
+                t.style.opacity    = '1';
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(() => { t.style.opacity = '0'; }, 2200);
+            }
+
+            document.querySelectorAll('.feat-toggle-group').forEach(group => {
                 group.querySelectorAll('.feat-btn').forEach(btn => {
-                    btn.classList.remove('feat-enabled-active','feat-soon-active','feat-disabled-active');
-                    btn.classList.add('feat-off');
+                    btn.addEventListener('click', async function() {
+                        const key     = group.dataset.key;
+                        const bizId   = group.dataset.biz;
+                        const current = group.dataset.current;
+                        const status  = this.dataset.val;
+                        if (status === current) return;
+
+                        // Optimistic UI
+                        const allBtns = group.querySelectorAll('.feat-btn');
+                        allBtns.forEach(b => { b.disabled = true; b.classList.remove(...Object.values(CLASS)); b.classList.add('feat-off'); });
+                        this.classList.remove('feat-off');
+                        this.classList.add(CLASS[status] || 'feat-off');
+                        setStatus('Saving…', 'spin');
+
+                        try {
+                            const fd = new FormData();
+                            fd.append('csrf_token', CSRF);
+                            fd.append('_tab',       'feature_toggle');
+                            fd.append('biz_id',     bizId);
+                            fd.append('key',        key);
+                            fd.append('status',     status);
+
+                            const res  = await fetch(URL, { method: 'POST', body: fd });
+                            const data = await res.json();
+
+                            if (data.ok) {
+                                group.dataset.current = status;
+                                setStatus('Saved', 'green');
+                                showToast('Saved', false);
+                            } else {
+                                throw new Error(data.error || 'Error');
+                            }
+                        } catch (e) {
+                            // Revert
+                            allBtns.forEach(b => { b.classList.remove(...Object.values(CLASS)); b.classList.add('feat-off'); });
+                            const revertBtn = group.querySelector(`[data-val="${current}"]`);
+                            if (revertBtn) { revertBtn.classList.remove('feat-off'); revertBtn.classList.add(CLASS[current] || 'feat-off'); }
+                            setStatus('Error — try again', 'red');
+                            showToast('Failed to save — please retry', true);
+                        } finally {
+                            allBtns.forEach(b => { b.disabled = false; });
+                        }
+                    });
                 });
-                const map = {enabled:'feat-enabled-active', coming_soon:'feat-soon-active', disabled:'feat-disabled-active'};
-                this.closest('.feat-btn').classList.remove('feat-off');
-                this.closest('.feat-btn').classList.add(map[this.value] || 'feat-off');
             });
-        });
+        })();
         </script>
         <?php endif; ?>
-    </div>
+    </div><!-- #feat-right -->
 
-</div>
+</div><!-- #feat-outer -->
 
 <?php elseif ($activeTab === 'general'): ?>
 <!-- ─── General Settings Tab ────────────────────────────────── -->
@@ -841,6 +977,66 @@ foreach ($allFeatureKeys as $key => $meta) {
         </button>
     </div>
 </form>
+
+<?php elseif ($activeTab === 'demo'): ?>
+<!-- ─── Demo Fee Tab ─────────────────────────────────────────── -->
+<div class="max-w-xl">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <h3 class="font-semibold text-gray-800 mb-1">Demo Booking Fee</h3>
+        <p class="text-sm text-gray-500 mb-5">Charge a fee for demo requests submitted via the landing page.</p>
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="<?= h(csrfToken()) ?>">
+            <input type="hidden" name="_tab" value="demo">
+
+            <div class="space-y-5">
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" name="demo_fee_enabled" value="1"
+                        <?= ($settingsRows['demo_fee_enabled'] ?? '0') === '1' ? 'checked' : '' ?>
+                        class="w-4 h-4 rounded text-blue-600">
+                    <div>
+                        <p class="text-sm font-medium text-gray-700">Enable demo fee</p>
+                        <p class="text-xs text-gray-400">Shows a payment notice on the booking form and collects a payment reference.</p>
+                    </div>
+                </label>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Fee Amount</label>
+                        <input type="number" name="demo_fee_amount" step="0.01" min="0"
+                            value="<?= h($settingsRows['demo_fee_amount'] ?? '') ?>"
+                            placeholder="0.00"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+                        <select name="demo_fee_currency"
+                            class="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500">
+                            <?php foreach ($currencies as $curr): ?>
+                            <option value="<?= h($curr['code']) ?>"
+                                <?= ($settingsRows['demo_fee_currency'] ?? 'NLE') === $curr['code'] ? 'selected' : '' ?>>
+                                <?= h($curr['code']) ?> — <?= h($curr['name']) ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Payment Instructions</label>
+                    <textarea name="demo_payment_instructions" rows="4"
+                        placeholder="e.g. Send payment via Orange Money to 078 123 4567 (John Doe). Use your name and email as the reference."
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"><?= h($settingsRows['demo_payment_instructions'] ?? '') ?></textarea>
+                    <p class="text-xs text-gray-400 mt-1">Displayed above the booking form when the fee is enabled.</p>
+                </div>
+
+                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
+                    <i class="fa-solid fa-save mr-1"></i> Save Demo Fee Settings
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <?php elseif ($activeTab === 'danger'): ?>
 <!-- ─── Danger Zone Tab ────────────────────────────────────── -->

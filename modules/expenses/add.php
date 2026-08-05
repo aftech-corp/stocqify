@@ -7,26 +7,32 @@ $db    = getDB();
 $bizId = currentBusinessId();
 $errors = [];
 
+try { $db->exec("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS branch_id INT UNSIGNED DEFAULT NULL"); } catch (\Throwable $e) {}
+
 $catsQ = $db->prepare('SELECT id, name FROM expense_categories WHERE business_id=? ORDER BY name');
 $catsQ->execute([$bizId]);
 $categories = $catsQ->fetchAll();
 
+$branchesQ = $db->prepare('SELECT id, name FROM branches WHERE business_id=? AND is_active=1 ORDER BY name');
+try { $branchesQ->execute([$bizId]); $branchList = $branchesQ->fetchAll(); } catch (\Throwable $e) { $branchList = []; }
+
 if (isPost()) {
     verifyCsrf();
-    $title   = post('title');
-    $catId   = (int)post('category_id') ?: null;
-    $amount  = (float)post('amount', 0);
-    $method  = post('payment_method','cash');
-    $ref     = post('reference_number');
-    $desc    = post('description');
-    $date    = post('expense_date', date('Y-m-d'));
+    $title      = post('title');
+    $catId      = (int)post('category_id') ?: null;
+    $amount     = (float)post('amount', 0);
+    $method     = post('payment_method','cash');
+    $ref        = post('reference_number');
+    $desc       = post('description');
+    $date       = post('expense_date', date('Y-m-d'));
+    $branchId   = array_key_exists('branch_id', $_POST) ? ((int)post('branch_id') ?: null) : currentBranchId();
 
     if (empty($title)) $errors[] = 'Title is required.';
     if ($amount <= 0)  $errors[] = 'Amount must be greater than 0.';
 
     if (empty($errors)) {
-        $stmt = $db->prepare('INSERT INTO expenses (business_id,category_id,user_id,title,description,amount,payment_method,reference_number,expense_date) VALUES (?,?,?,?,?,?,?,?,?)');
-        $stmt->execute([$bizId,$catId,currentUser()['id'],$title,$desc?:null,$amount,$method,$ref?:null,$date]);
+        $stmt = $db->prepare('INSERT INTO expenses (business_id,category_id,user_id,title,description,amount,payment_method,reference_number,expense_date,branch_id) VALUES (?,?,?,?,?,?,?,?,?,?)');
+        $stmt->execute([$bizId,$catId,currentUser()['id'],$title,$desc?:null,$amount,$method,$ref?:null,$date,$branchId?:null]);
         auditLog('create','expenses',(int)$db->lastInsertId(),[],compact('title','amount'));
         flash('success','Expense recorded successfully.');
         redirect(url('expenses'));
@@ -37,7 +43,7 @@ $pageTitle = 'Add Expense';
 include __DIR__ . '/../../app/includes/header.php';
 include __DIR__ . '/../../app/includes/sidebar.php';
 ?>
-<div class="max-w-2xl mx-auto">
+<div>
     <div class="flex items-center gap-3 mb-6">
         <a href="index.php" class="text-gray-500 hover:text-gray-700"><i class="fa-solid fa-arrow-left"></i></a>
         <h2 class="text-xl font-bold text-gray-800">Record Expense</h2>
@@ -67,7 +73,7 @@ include __DIR__ . '/../../app/includes/sidebar.php';
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Amount (<?= CURRENCY_SYMBOL ?>) *</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Amount (<?= currencySymbol() ?>) *</label>
                     <input type="number" name="amount" value="<?= h(post('amount','')) ?>" min="0.01" step="0.01" required
                         class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                 </div>
@@ -91,6 +97,17 @@ include __DIR__ . '/../../app/includes/sidebar.php';
                     <input type="text" name="reference_number" value="<?= h(post('reference_number')) ?>"
                         class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Optional">
                 </div>
+                <?php if (!empty($branchList)): ?>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+                    <select name="branch_id" class="w-full border border-gray-300 rounded-lg text-sm px-3 py-2 outline-none">
+                        <option value="">-- All Branches --</option>
+                        <?php foreach ($branchList as $br): ?>
+                        <option value="<?= $br['id'] ?>" <?= (string)(int)post('branch_id', currentBranchId()) === (string)$br['id'] ? 'selected' : '' ?>><?= h($br['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
                 <div class="md:col-span-2">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
                     <textarea name="description" rows="2"

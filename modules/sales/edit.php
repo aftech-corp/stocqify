@@ -269,8 +269,8 @@ function recalcEdit() {
     const paid    = isCash ? total : (parseFloat(document.getElementById('editPaid').value) || 0);
     const balance = Math.max(0, total - paid);
     document.getElementById('discDisplay').textContent      = '–' + disc.toFixed(2);
-    document.getElementById('totalEditDisplay').textContent = '<?= CURRENCY_SYMBOL ?> ' + total.toFixed(2);
-    document.getElementById('balanceEditDisplay').textContent = '<?= CURRENCY_SYMBOL ?> ' + balance.toFixed(2);
+    document.getElementById('totalEditDisplay').textContent = '<?= currencySymbol() ?> ' + total.toFixed(2);
+    document.getElementById('balanceEditDisplay').textContent = '<?= currencySymbol() ?> ' + balance.toFixed(2);
 }
 
 document.getElementById('editDiscount').addEventListener('input', recalcEdit);

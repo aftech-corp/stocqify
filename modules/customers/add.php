@@ -20,8 +20,8 @@ if (isPost()) {
     if ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Invalid email address.';
 
     if (empty($errors)) {
-        $stmt = $db->prepare('INSERT INTO customers (business_id, name, phone, email, address, business_name, credit_limit) VALUES (?,?,?,?,?,?,?)');
-        $stmt->execute([$bizId, $name, $phone ?: null, $email ?: null, $address ?: null, $bizName ?: null, $credit]);
+        $stmt = $db->prepare('INSERT INTO customers (business_id, name, phone, email, address, business_name, credit_limit, branch_id) VALUES (?,?,?,?,?,?,?,?)');
+        $stmt->execute([$bizId, $name, $phone ?: null, $email ?: null, $address ?: null, $bizName ?: null, $credit, currentBranchId()]);
         $id = $db->lastInsertId();
         auditLog('create', 'customers', $id, [], compact('name','phone','email'));
         flash('success', "Customer '{$name}' added successfully.");
@@ -77,7 +77,7 @@ include __DIR__ . '/../../app/includes/sidebar.php';
                         placeholder="Optional">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Credit Limit (<?= CURRENCY_SYMBOL ?>)</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Credit Limit (<?= currencySymbol() ?>)</label>
                     <input type="number" name="credit_limit" value="<?= h(post('credit_limit', '0')) ?>" min="0" step="0.01"
                         class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                 </div>

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../app/includes/auth.php';
 require_once __DIR__ . '/../../app/includes/functions.php';
 requirePermission('sales');
+requireFeature('sales_customers');
 
 $db    = getDB();
 $bizId = currentBusinessId();
@@ -14,6 +15,14 @@ $params = $bizId ? [$bizId] : [];
 if ($search) {
     $where .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ? OR c.business_name LIKE ?)";
     $params = array_merge($params, ["%$search%","%$search%","%$search%","%$search%"]);
+}
+
+// Branch filter
+try { $db->exec("ALTER TABLE customers ADD COLUMN IF NOT EXISTS branch_id INT UNSIGNED DEFAULT NULL"); } catch (\Throwable $e) {}
+$__activeBranch = currentBranchId();
+if ($__activeBranch !== null) {
+    $where .= ' AND c.branch_id = ?';
+    $params[] = $__activeBranch;
 }
 
 $totalQ = $db->prepare("SELECT COUNT(*) FROM customers c WHERE $where AND c.is_active=1");
@@ -37,6 +46,7 @@ include __DIR__ . '/../../app/includes/header.php';
 include __DIR__ . '/../../app/includes/sidebar.php';
 ?>
 
+<?= renderBranchBanner() ?>
 <div class="flex items-center justify-between mb-6">
     <div>
         <h2 class="text-xl font-bold text-gray-800">Customer Management</h2>

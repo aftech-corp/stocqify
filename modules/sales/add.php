@@ -8,13 +8,16 @@ $bizId = currentBusinessId();
 $errors = [];
 $preCustomer = (int)get('customer_id');
 
-// Load customers and products for dropdowns
-$custsQ = $db->prepare('SELECT id, name, phone FROM customers WHERE business_id=? AND is_active=1 ORDER BY name');
-$custsQ->execute([$bizId]);
+// Load customers and products for dropdowns — filtered to active branch when one is set
+$__branchFilter = currentBranchId() !== null ? ' AND branch_id = ?' : '';
+$__branchParam  = currentBranchId() !== null ? [currentBranchId()] : [];
+
+$custsQ = $db->prepare('SELECT id, name, phone FROM customers WHERE business_id=? AND is_active=1' . $__branchFilter . ' ORDER BY name');
+$custsQ->execute(array_merge([$bizId], $__branchParam));
 $customers = $custsQ->fetchAll();
 
-$prodsQ = $db->prepare('SELECT id, name, cost_price, selling_price, stock_quantity, unit FROM products WHERE business_id=? AND is_active=1 ORDER BY name');
-$prodsQ->execute([$bizId]);
+$prodsQ = $db->prepare('SELECT id, name, cost_price, selling_price, stock_quantity, unit FROM products WHERE business_id=? AND is_active=1' . $__branchFilter . ' ORDER BY name');
+$prodsQ->execute(array_merge([$bizId], $__branchParam));
 $products = $prodsQ->fetchAll();
 $productsMap = array_column($products, null, 'id');
 
@@ -53,6 +56,12 @@ if (isPost()) {
     if (!in_array($saleType, ['cash','credit'])) $errors[] = 'Invalid sale type.';
     if ($saleType === 'credit' && !$customerId) $errors[] = 'A customer must be selected for credit sales. Walk-in customers cannot have credit.';
 
+    // Plan quota check
+    $__orderLimit = planLimitCheck($bizId, 'max_orders_per_month');
+    if ($__orderLimit['reached']) {
+        $errors[] = "Your current plan allows a maximum of {$__orderLimit['limit']} orders per month (you have {$__orderLimit['count']} this month). Please contact your admin to upgrade your plan.";
+    }
+
     if (empty($errors)) {
         $subtotal = array_sum(array_column($lineItems, 'total'));
         $total    = $subtotal - $discount;
@@ -67,8 +76,8 @@ if (isPost()) {
         $db->beginTransaction();
         try {
             // Insert sale
-            $stmt = $db->prepare('INSERT INTO sales (business_id,customer_id,walkin_name,user_id,invoice_number,sale_type,subtotal,discount_amount,total_amount,amount_paid,balance_due,payment_method,payment_status,notes,sale_date,due_date) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-            $stmt->execute([$bizId,$customerId,$walkinName?:null,currentUser()['id'],$invoiceNo,$saleType,$subtotal,$discount,$total,$amountPaid,$balance,$payMethod,$payStatus,$notes?:null,$saleDate,$dueDate]);
+            $stmt = $db->prepare('INSERT INTO sales (business_id,customer_id,walkin_name,user_id,invoice_number,sale_type,subtotal,discount_amount,total_amount,amount_paid,balance_due,payment_method,payment_status,notes,sale_date,due_date,branch_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+            $stmt->execute([$bizId,$customerId,$walkinName?:null,currentUser()['id'],$invoiceNo,$saleType,$subtotal,$discount,$total,$amountPaid,$balance,$payMethod,$payStatus,$notes?:null,$saleDate,$dueDate,currentBranchId()]);
             $saleId = (int)$db->lastInsertId();
 
             // Insert sale items + deduct stock
@@ -275,7 +284,7 @@ include __DIR__ . '/../../app/includes/sidebar.php';
 <!-- Product data for JS -->
 <script>
 const PRODUCTS = <?= json_encode(array_values($productsMap)) ?>;
-const CURRENCY = '<?= CURRENCY_SYMBOL ?>';
+const CURRENCY = '<?= currencySymbol() ?>';
 let rowCount = 1;
 
 function getProductsOptions(selectedId = '') {

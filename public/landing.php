@@ -35,11 +35,14 @@ function _emailRow(string $label, string $value): string {
     </tr>";
 }
 
-function _demoAdminEmail(string $n, string $e, string $b, string $p, string $m): string {
+function _demoAdminEmail(string $n, string $e, string $b, string $p, string $co, string $la, string $m, string $pref = ''): string {
     $rows  = _emailRow('Name', htmlspecialchars($n))
            . _emailRow('Email', htmlspecialchars($e))
            . _emailRow('Business', htmlspecialchars($b) ?: '—')
            . _emailRow('Phone', htmlspecialchars($p) ?: '—')
+           . _emailRow('Country', htmlspecialchars($co) ?: '—')
+           . _emailRow('Language', htmlspecialchars($la) ?: '—')
+           . ($pref ? _emailRow('Payment Ref', htmlspecialchars($pref)) : '')
            . _emailRow('Message', nl2br(htmlspecialchars($m)) ?: '—');
     $body  = "<div style='background:#fef9ec;border-left:4px solid #C9A84C;padding:11px 16px;border-radius:0 8px 8px 0;margin-bottom:20px'>
                 <strong style='color:#92400e;font-size:14px'>&#128197; New Demo Booking</strong>
@@ -103,7 +106,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = trim($_POST['_action'] ?? '');
     try {
         $db = getDB();
-        $db->exec("CREATE TABLE IF NOT EXISTS `landing_demos` (`id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`name` VARCHAR(100),`email` VARCHAR(255),`business_name` VARCHAR(150),`phone` VARCHAR(30),`message` TEXT,`created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $db->exec("CREATE TABLE IF NOT EXISTS `landing_demos` (`id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`name` VARCHAR(100),`email` VARCHAR(255),`business_name` VARCHAR(150),`phone` VARCHAR(30),`country` VARCHAR(100),`language` VARCHAR(50),`payment_reference` VARCHAR(200),`message` TEXT,`created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        try { $db->exec("ALTER TABLE landing_demos ADD COLUMN IF NOT EXISTS country VARCHAR(100) DEFAULT NULL"); } catch (\Exception $__ex) {}
+        try { $db->exec("ALTER TABLE landing_demos ADD COLUMN IF NOT EXISTS language VARCHAR(50) DEFAULT NULL"); } catch (\Exception $__ex) {}
+        try { $db->exec("ALTER TABLE landing_demos ADD COLUMN IF NOT EXISTS payment_reference VARCHAR(200) DEFAULT NULL"); } catch (\Exception $__ex) {}
         $db->exec("CREATE TABLE IF NOT EXISTS `landing_newsletter` (`id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`email` VARCHAR(255) UNIQUE NOT NULL,`created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         $db->exec("CREATE TABLE IF NOT EXISTS `landing_contacts` (`id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,`name` VARCHAR(100),`email` VARCHAR(255),`subject` VARCHAR(200),`message` TEXT,`created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
@@ -117,14 +123,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (\Exception $ex) {}
 
         if ($action === 'demo') {
-            $n = trim($_POST['d_name'] ?? ''); $e = trim($_POST['d_email'] ?? '');
-            $b = trim($_POST['d_biz'] ?? '');  $p = trim($_POST['d_phone'] ?? '');
-            $m = trim($_POST['d_msg'] ?? '');
+            $n    = trim($_POST['d_name']    ?? ''); $e  = trim($_POST['d_email']   ?? '');
+            $b    = trim($_POST['d_biz']     ?? ''); $p  = trim($_POST['d_phone']   ?? '');
+            $co   = trim($_POST['d_country'] ?? ''); $la = trim($_POST['d_lang']    ?? '');
+            $pref = trim($_POST['d_pref']    ?? ''); $m  = trim($_POST['d_msg']     ?? '');
             if (!$n) $fErrors['demo'] = 'Your name is required.';
             elseif (!filter_var($e, FILTER_VALIDATE_EMAIL)) $fErrors['demo'] = 'A valid email address is required.';
             else {
-                $db->prepare("INSERT INTO landing_demos (name,email,business_name,phone,message) VALUES (?,?,?,?,?)")->execute([$n,$e,$b,$p,$m]);
-                // In-app + push notification for all admins (no email here — detailed email sent separately below)
+                $db->prepare("INSERT INTO landing_demos (name,email,business_name,phone,country,language,payment_reference,message) VALUES (?,?,?,?,?,?,?,?)")->execute([$n,$e,$b,$p,$co,$la,$pref?:null,$m]);
                 try {
                     $__notifAdmins = $db->query("SELECT u.id FROM users u JOIN roles r ON r.id=u.role_id WHERE r.slug='admin' AND u.is_active=1")->fetchAll();
                     $__notifBody   = $n . ($b ? " ({$b})" : '') . ' has requested a demo session.';
@@ -132,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         createNotification((int)$__adm['id'], 'info', 'New Demo Request', $__notifBody, url('admin/demos'));
                     }
                 } catch (\Exception $__ne) {}
-                if ($adminEmail) appMail($adminEmail, "New Demo Booking — {$n}", _demoAdminEmail($n,$e,$b,$p,$m));
+                if ($adminEmail) appMail($adminEmail, "New Demo Booking — {$n}", _demoAdminEmail($n,$e,$b,$p,$co,$la,$m,$pref));
                 appMail($e, 'Demo Request Received — ' . APP_NAME, _demoConfirmEmail($n), $n);
                 $fSuccess['demo'] = true;
             }
@@ -176,7 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Load contact/social settings for landing page
 $__gs = [];
 try {
-    $__gs = getDB()->query("SELECT `key`,`value` FROM system_settings WHERE `key` LIKE 'contact_%' OR `key` LIKE 'social_%'")->fetchAll(PDO::FETCH_KEY_PAIR) ?: [];
+    $__gs = getDB()->query("SELECT `key`,`value` FROM system_settings WHERE `key` LIKE 'contact_%' OR `key` LIKE 'social_%' OR `key` LIKE 'demo_%'")->fetchAll(PDO::FETCH_KEY_PAIR) ?: [];
 } catch (\Exception $__gse) {}
 
 $loginUrl = SITE_URL . '/login';
@@ -186,8 +192,9 @@ $loginUrl = SITE_URL . '/login';
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= APP_NAME ?> — <?= APP_TAGLINE ?></title>
+<title><?= APP_NAME ?> | <?= APP_TAGLINE ?></title>
 <meta name="description" content="The all-in-one business management platform empowering growing businesses worldwide. Track sales, manage inventory, analyse performance and grow faster.">
+<link rel="icon" type="image/png" href="<?= APP_LOGO ?>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -427,6 +434,11 @@ textarea.fc{resize:vertical;min-height:88px}
 .f-success i{font-size:26px;color:#22c55e;display:block;margin-bottom:8px}
 .f-success p{color:#15803d;font-weight:600;font-size:15px}
 .f-error{background:#fff1f2;border:1px solid #fecdd3;border-radius:10px;padding:10px 14px;font-size:13px;color:#be123c;margin-bottom:14px}
+.demo-fee-notice{background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.4);border-radius:12px;padding:14px 16px;margin-bottom:18px}
+.demo-fee-header{font-size:14px;font-weight:700;color:#92400e;margin-bottom:4px}
+.demo-fee-header i{color:#C9A84C;margin-right:6px}
+.demo-fee-inst{font-size:13px;color:#78350f;margin:0;line-height:1.5}
+.fee-req{font-size:11px;font-weight:600;color:#C9A84C;margin-left:6px;text-transform:uppercase;letter-spacing:.03em}
 
 /* ─── NEWSLETTER ──────────────────────────────────────── */
 .newsletter{background:linear-gradient(140deg,var(--navy-dark),var(--navy-mid));position:relative;overflow:hidden}
@@ -483,6 +495,11 @@ textarea.fc{resize:vertical;min-height:88px}
 
 /* ─── RESPONSIVE ──────────────────────────────────────── */
 @media(max-width:1024px){
+  .btn-hero-primary i,.btn-hero-sec i{display:none}
+  .nav-links{display:none}
+  .nav-ham{display:block}
+  .nav-links.open{display:flex;flex-direction:column;position:absolute;top:100%;left:0;right:0;background:rgba(6,13,26,.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);padding:14px 20px 20px;border-top:1px solid rgba(255,255,255,.06);gap:2px;z-index:999;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+  .nav-links.open li a{display:block;padding:11px 16px;border-radius:10px;font-size:15px}
   .hero-inner{grid-template-columns:1fr;text-align:center}
   .hero-visual{display:none}
   .hero-badge,.hero-btns,.hero-trust{justify-content:center}
@@ -491,17 +508,15 @@ textarea.fc{resize:vertical;min-height:88px}
   .about-grid,.demo-grid,.contact-grid{grid-template-columns:1fr}
   .steps-grid{grid-template-columns:1fr;gap:28px}
   .steps-grid::before{display:none}
-  .footer-grid{grid-template-columns:1fr 1fr}
+  .footer-grid{grid-template-columns:1fr 1fr;gap:32px}
+  .fl-brand{grid-column:1/-1}
 }
 @media(max-width:640px){
   section{padding:64px 0}
-  .nav-links{display:none}
-  .nav-ham{display:block}
-  .nav-links.open{display:flex;flex-direction:column;position:absolute;top:100%;left:0;right:0;background:rgba(6,13,26,.97);backdrop-filter:blur(20px);padding:16px;border-top:1px solid rgba(255,255,255,.05)}
+  .nav-cta .btn-ghost{display:none}
   .stats-inner{grid-template-columns:1fr 1fr}
   .feat-grid{grid-template-columns:1fr}
   .form-row-2{grid-template-columns:1fr}
-  .footer-grid{grid-template-columns:1fr}
   .footer-bottom{flex-direction:column;text-align:center}
 }
 </style>
@@ -820,7 +835,7 @@ textarea.fc{resize:vertical;min-height:88px}
 
       <div class="reveal rd2">
         <div class="form-card">
-          <h3>Book Your Free Demo</h3>
+          <h3>Book a Demo with our team</h3>
           <p>Fill in your details and we'll get in touch within 24 hours.</p>
 
           <?php if(!empty($fSuccess['demo'])):?>
@@ -828,6 +843,18 @@ textarea.fc{resize:vertical;min-height:88px}
           <?php else:?>
 
           <?php if(!empty($fErrors['demo'])):?><div class="f-error"><i class="fa-solid fa-circle-xmark"></i> <?=htmlspecialchars($fErrors['demo'])?></div><?php endif;?>
+
+          <?php if(($__gs['demo_fee_enabled']??'0')==='1' && ($__gs['demo_fee_amount']??'')):
+            $__dAmt  = number_format((float)$__gs['demo_fee_amount'],2);
+            $__dCurr = htmlspecialchars($__gs['demo_fee_currency'] ?? 'NLE');
+            $__dInst = htmlspecialchars($__gs['demo_payment_instructions'] ?? '');
+          ?>
+          <div class="demo-fee-notice">
+            <div class="demo-fee-header"><i class="fa-solid fa-coins"></i> Demo Booking Fee: <?=$__dCurr?> <?=$__dAmt?></div>
+            <?php if($__dInst):?><p class="demo-fee-inst"><?=nl2br($__dInst)?></p><?php endif;?>
+          </div>
+          <?php endif;?>
+
           <form method="POST" action="#demo">
             <input type="hidden" name="_action" value="demo">
             <div class="form-row-2">
@@ -838,6 +865,69 @@ textarea.fc{resize:vertical;min-height:88px}
               <div class="fg"><label>Business Name</label><input class="fc" type="text" name="d_biz" placeholder="Your Business Name" value="<?=htmlspecialchars($_POST['d_biz']??'')?>"></div>
               <div class="fg"><label>Phone Number</label><input class="fc" type="tel" name="d_phone" placeholder="+232 76 000000" value="<?=htmlspecialchars($_POST['d_phone']??'')?>"></div>
             </div>
+            <div class="form-row-2">
+              <div class="fg">
+                <label>Country</label>
+                <select class="fc" name="d_country">
+                  <option value="">Select your country…</option>
+                  <optgroup label="West Africa">
+                    <option value="Sierra Leone" <?=($_POST['d_country']??'')==='Sierra Leone'?'selected':''?>>Sierra Leone</option>
+                    <option value="Ghana" <?=($_POST['d_country']??'')==='Ghana'?'selected':''?>>Ghana</option>
+                    <option value="Nigeria" <?=($_POST['d_country']??'')==='Nigeria'?'selected':''?>>Nigeria</option>
+                    <option value="Liberia" <?=($_POST['d_country']??'')==='Liberia'?'selected':''?>>Liberia</option>
+                    <option value="Guinea" <?=($_POST['d_country']??'')==='Guinea'?'selected':''?>>Guinea</option>
+                    <option value="Senegal" <?=($_POST['d_country']??'')==='Senegal'?'selected':''?>>Senegal</option>
+                    <option value="Gambia" <?=($_POST['d_country']??'')==='Gambia'?'selected':''?>>Gambia</option>
+                    <option value="Côte d'Ivoire" <?=($_POST['d_country']??'')==="Côte d'Ivoire"?'selected':''?>>Côte d'Ivoire</option>
+                    <option value="Mali" <?=($_POST['d_country']??'')==='Mali'?'selected':''?>>Mali</option>
+                    <option value="Burkina Faso" <?=($_POST['d_country']??'')==='Burkina Faso'?'selected':''?>>Burkina Faso</option>
+                  </optgroup>
+                  <optgroup label="East Africa">
+                    <option value="Kenya" <?=($_POST['d_country']??'')==='Kenya'?'selected':''?>>Kenya</option>
+                    <option value="Uganda" <?=($_POST['d_country']??'')==='Uganda'?'selected':''?>>Uganda</option>
+                    <option value="Tanzania" <?=($_POST['d_country']??'')==='Tanzania'?'selected':''?>>Tanzania</option>
+                    <option value="Rwanda" <?=($_POST['d_country']??'')==='Rwanda'?'selected':''?>>Rwanda</option>
+                    <option value="Ethiopia" <?=($_POST['d_country']??'')==='Ethiopia'?'selected':''?>>Ethiopia</option>
+                  </optgroup>
+                  <optgroup label="Southern Africa">
+                    <option value="South Africa" <?=($_POST['d_country']??'')==='South Africa'?'selected':''?>>South Africa</option>
+                    <option value="Zimbabwe" <?=($_POST['d_country']??'')==='Zimbabwe'?'selected':''?>>Zimbabwe</option>
+                    <option value="Zambia" <?=($_POST['d_country']??'')==='Zambia'?'selected':''?>>Zambia</option>
+                  </optgroup>
+                  <optgroup label="Rest of World">
+                    <option value="United Kingdom" <?=($_POST['d_country']??'')==='United Kingdom'?'selected':''?>>United Kingdom</option>
+                    <option value="United States" <?=($_POST['d_country']??'')==='United States'?'selected':''?>>United States</option>
+                    <option value="Canada" <?=($_POST['d_country']??'')==='Canada'?'selected':''?>>Canada</option>
+                    <option value="Australia" <?=($_POST['d_country']??'')==='Australia'?'selected':''?>>Australia</option>
+                    <option value="France" <?=($_POST['d_country']??'')==='France'?'selected':''?>>France</option>
+                    <option value="Germany" <?=($_POST['d_country']??'')==='Germany'?'selected':''?>>Germany</option>
+                    <option value="Portugal" <?=($_POST['d_country']??'')==='Portugal'?'selected':''?>>Portugal</option>
+                    <option value="Other" <?=($_POST['d_country']??'')==='Other'?'selected':''?>>Other</option>
+                  </optgroup>
+                </select>
+              </div>
+              <div class="fg">
+                <label>Preferred Language</label>
+                <select class="fc" name="d_lang">
+                  <option value="">Select language…</option>
+                  <option value="English" <?=($_POST['d_lang']??'')==='English'?'selected':''?>>English</option>
+                  <option value="French" <?=($_POST['d_lang']??'')==='French'?'selected':''?>>French</option>
+                  <option value="Arabic" <?=($_POST['d_lang']??'')==='Arabic'?'selected':''?>>Arabic</option>
+                  <option value="Krio" <?=($_POST['d_lang']??'')==='Krio'?'selected':''?>>Krio</option>
+                  <option value="Hausa" <?=($_POST['d_lang']??'')==='Hausa'?'selected':''?>>Hausa</option>
+                  <option value="Yoruba" <?=($_POST['d_lang']??'')==='Yoruba'?'selected':''?>>Yoruba</option>
+                  <option value="Swahili" <?=($_POST['d_lang']??'')==='Swahili'?'selected':''?>>Swahili</option>
+                  <option value="Portuguese" <?=($_POST['d_lang']??'')==='Portuguese'?'selected':''?>>Portuguese</option>
+                  <option value="Spanish" <?=($_POST['d_lang']??'')==='Spanish'?'selected':''?>>Spanish</option>
+                </select>
+              </div>
+            </div>
+            <?php if(($__gs['demo_fee_enabled']??'0')==='1' && ($__gs['demo_fee_amount']??'')):?>
+            <div class="fg">
+              <label>Payment Reference <span class="fee-req">*required</span></label>
+              <input class="fc" type="text" name="d_pref" value="<?=htmlspecialchars($_POST['d_pref']??'')?>" placeholder="e.g. OM-123456789 or transaction ID">
+            </div>
+            <?php endif;?>
             <div class="fg"><label>What do you want to see?</label><textarea class="fc" name="d_msg" placeholder="e.g. I run a retail shop and want to see how inventory tracking works..."><?=htmlspecialchars($_POST['d_msg']??'')?></textarea></div>
             <button type="submit" class="btn-submit"><i class="fa-solid fa-calendar-check"></i> Book My Free Demo</button>
           </form>

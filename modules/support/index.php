@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../app/includes/functions.php';
 require_once __DIR__ . '/../../app/includes/mail.php';
 requireLogin();
 if (isAdmin()) { redirect(url('support/tickets')); }
+requireFeature('support_tickets');
 
 $db    = getDB();
 $bizId = currentBusinessId();

@@ -20,7 +20,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'lifetime' => SESSION_LIFETIME,
         'path'     => '/',
-        'secure'   => false, // Set true in production with HTTPS
+        'secure'   => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
         'httponly' => true,
         'samesite' => 'Strict',
     ]);
@@ -35,7 +35,8 @@ function isLoggedIn(): bool {
 
 function requireLogin(): void {
     if (!isLoggedIn()) {
-        header('Location: ' . SITE_URL . '/login?redirect=' . urlencode($_SERVER['REQUEST_URI']));
+        $_SESSION['login_redirect'] = $_SERVER['REQUEST_URI'];
+        header('Location: ' . SITE_URL . '/login');
         exit;
     }
     // Redirect to password change if flagged (before any other page access)

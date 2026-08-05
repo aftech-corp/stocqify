@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../app/includes/auth.php';
 require_once __DIR__ . '/../../app/includes/functions.php';
 requirePermission('payments');
+requireFeature('finance_payments');
 
 $db    = getDB();
 $bizId = currentBusinessId();

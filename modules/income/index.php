@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../app/includes/auth.php';
 require_once __DIR__ . '/../../app/includes/functions.php';
 requirePermission('expenses'); // same financial permission as expenses
+requireFeature('finance_income');
 
 $db    = getDB();
 $bizId = currentBusinessId();
@@ -15,6 +16,14 @@ $params = [$bizId];
 if ($from)   { $where .= ' AND i.income_date>=?'; $params[] = $from; }
 if ($to)     { $where .= ' AND i.income_date<=?'; $params[] = $to; }
 if ($method) { $where .= ' AND i.payment_method=?'; $params[] = $method; }
+
+// Branch filter
+try { $db->exec("ALTER TABLE income ADD COLUMN IF NOT EXISTS branch_id INT UNSIGNED DEFAULT NULL"); } catch (\Throwable $e) {}
+$__activeBranch = currentBranchId();
+if ($__activeBranch !== null) {
+    $where .= ' AND i.branch_id = ?';
+    $params[] = $__activeBranch;
+}
 
 $totalQ = $db->prepare("SELECT COUNT(*) FROM income i WHERE $where");
 $totalQ->execute($params);
@@ -43,6 +52,7 @@ include __DIR__ . '/../../app/includes/header.php';
 include __DIR__ . '/../../app/includes/sidebar.php';
 ?>
 
+<?= renderBranchBanner() ?>
 <div class="flex items-center justify-between mb-6">
     <div>
         <h2 class="text-xl font-bold text-gray-800">Income Records</h2>
