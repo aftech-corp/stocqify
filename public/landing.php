@@ -355,7 +355,7 @@ a{text-decoration:none}
 section{padding:92px 0}
 .container{max-width:1200px;margin:0 auto;padding:0 24px}
 .sec-eye{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--gold);margin-bottom:12px}
-.sec-title{font-size:clamp(26px,3.8vw,44px);font-weight:900;color:var(--gray-900);letter-spacing:-1.5px;line-height:1.1;margin-bottom:14px}
+.sec-title{font-size:clamp(26px,3.8vw,44px);font-weight:900;color:var(--gray-900);letter-spacing:-1.5px;line-height:1.1;margin-bottom:14px;text-wrap:balance}
 .sec-title.light{color:#fff}
 .sec-sub{font-size:16.5px;color:var(--gray-500);max-width:520px;line-height:1.75}
 .sec-sub.light{color:rgba(255,255,255,.55)}
@@ -493,19 +493,54 @@ textarea.fc{resize:vertical;min-height:88px}
 @keyframes fadeUp{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideRight{from{opacity:0;transform:translateX(55px)}to{opacity:1;transform:translateX(0)}}
 
+/* ─── CONTACT INFO LINKS ─────────────────────────────────── */
+.ci-link{color:var(--navy);font-weight:600;font-size:14px;transition:color .2s;word-break:break-all}
+.ci-link:hover{color:var(--gold)}
+
+/* ─── MOBILE OVERLAY MENU ─────────────────────────────────── */
+.mob-overlay{position:fixed;inset:0;z-index:1100;display:flex;flex-direction:column;overflow-y:auto;background:linear-gradient(160deg,rgba(245,250,255,.97) 0%,rgba(235,245,255,.96) 100%);backdrop-filter:blur(32px);-webkit-backdrop-filter:blur(32px);opacity:0;visibility:hidden;transform:translateX(100%);transition:opacity .3s ease,visibility .3s ease,transform .38s cubic-bezier(.4,0,.2,1)}
+.mob-overlay.open{opacity:1;visibility:visible;transform:translateX(0)}
+.mob-ov-inner{display:flex;flex-direction:column;min-height:100%;padding:20px 24px 40px}
+.mob-ov-topbar{display:flex;justify-content:flex-end;margin-bottom:18px}
+.mob-ov-close{width:42px;height:42px;border:1.5px solid rgba(27,50,99,.13);border-radius:11px;background:rgba(27,50,99,.05);color:var(--navy);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+.mob-ov-close:hover{background:rgba(27,50,99,.1);border-color:rgba(27,50,99,.25)}
+.mob-ov-label{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:rgba(27,50,99,.38);margin-bottom:14px;padding-left:4px}
+.mob-ov-nav{display:flex;flex-direction:column;gap:3px}
+.mob-ov-link{display:flex;align-items:center;gap:14px;padding:11px 12px;border-radius:13px;font-size:18px;font-weight:700;color:var(--navy);transition:background .2s,color .2s}
+.mob-ov-link:hover{background:rgba(27,50,99,.06)}
+.mob-ov-icon{width:38px;height:38px;background:rgba(27,50,99,.07);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--navy);flex-shrink:0;transition:all .2s}
+.mob-ov-link:hover .mob-ov-icon{background:rgba(201,168,76,.18);color:var(--gold)}
+.mob-ov-divider{height:1px;background:rgba(27,50,99,.09);margin:18px 0}
+.mob-ov-cta{display:flex;align-items:center;justify-content:center;gap:9px;background:linear-gradient(135deg,var(--gold),var(--gold-lt));color:var(--navy-dark);font-size:15.5px;font-weight:700;padding:15px 24px;border-radius:13px;box-shadow:0 4px 22px rgba(201,168,76,.3);transition:all .25s;letter-spacing:.01em}
+.mob-ov-cta:hover{box-shadow:0 8px 32px rgba(201,168,76,.52);transform:translateY(-1px)}
+.mob-ov-bottom{margin-top:auto;padding-top:32px}
+.mob-ov-secondary{display:flex;gap:22px;flex-wrap:wrap;margin-bottom:18px}
+.mob-ov-secondary a{font-size:13px;font-weight:500;color:rgba(27,50,99,.38);transition:color .2s}
+.mob-ov-secondary a:hover{color:var(--navy)}
+.mob-ov-socials{display:flex;gap:10px}
+.mob-ov-soc{width:40px;height:40px;background:var(--navy-deep);border-radius:10px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.65);font-size:15px;transition:all .2s}
+.mob-ov-soc:hover{background:var(--navy);color:var(--gold-lt)}
+
+/* ─── BACK TO TOP ────────────────────────────────────────── */
+.back-to-top{position:fixed;bottom:28px;right:28px;width:46px;height:46px;background:linear-gradient(135deg,var(--gold),var(--gold-lt));color:var(--navy-dark);border:none;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;box-shadow:0 4px 18px rgba(201,168,76,.42);opacity:0;visibility:hidden;transform:translateY(12px);transition:opacity .3s,visibility .3s,transform .3s;z-index:998}
+.back-to-top.visible{opacity:1;visibility:visible;transform:translateY(0)}
+.back-to-top:hover{transform:translateY(-4px);box-shadow:0 10px 30px rgba(201,168,76,.55)}
+
 /* ─── RESPONSIVE ──────────────────────────────────────── */
 @media(max-width:1024px){
   .btn-hero-primary i,.btn-hero-sec i{display:none}
   .nav-links{display:none}
   .nav-ham{display:block}
-  .nav-links.open{display:flex;flex-direction:column;position:absolute;top:100%;left:0;right:0;background:rgba(6,13,26,.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);padding:14px 20px 20px;border-top:1px solid rgba(255,255,255,.06);gap:2px;z-index:999;box-shadow:0 8px 24px rgba(0,0,0,.35)}
-  .nav-links.open li a{display:block;padding:11px 16px;border-radius:10px;font-size:15px}
+  .nav-logo-text{color:var(--gold)}
+  .nav-cta .btn-gold{display:none}
   .hero-inner{grid-template-columns:1fr;text-align:center}
   .hero-visual{display:none}
   .hero-badge,.hero-btns,.hero-trust{justify-content:center}
-  .hero-sub{margin:0 auto 34px}
+  .hero-sub{margin:0 auto 34px;max-width:100%}
   .feat-grid{grid-template-columns:repeat(2,1fr)}
   .about-grid,.demo-grid,.contact-grid{grid-template-columns:1fr}
+  .about-vis{margin-top:40px}
+  .about-float{top:-10px;right:0}
   .steps-grid{grid-template-columns:1fr;gap:28px}
   .steps-grid::before{display:none}
   .footer-grid{grid-template-columns:1fr 1fr;gap:32px}
@@ -516,8 +551,12 @@ textarea.fc{resize:vertical;min-height:88px}
   .nav-cta .btn-ghost{display:none}
   .stats-inner{grid-template-columns:1fr 1fr}
   .feat-grid{grid-template-columns:1fr}
+  .feat-card{padding:22px}
   .form-row-2{grid-template-columns:1fr}
+  .sec-sub{max-width:100%}
+  .demo-info h3{font-size:22px}
   .footer-bottom{flex-direction:column;text-align:center}
+  .back-to-top{bottom:20px;right:20px;width:42px;height:42px;font-size:15px}
 }
 </style>
 </head>
@@ -980,15 +1019,15 @@ textarea.fc{resize:vertical;min-height:88px}
           <?php if ($__ce): ?>
           <div class="ci-item">
             <div class="ci-ico"><i class="fa-solid fa-envelope"></i></div>
-            <div><div class="ci-lbl">Email</div><div class="ci-val"><a href="mailto:<?=htmlspecialchars($__ce)?>" class="sec-eye"><?=htmlspecialchars($__ce)?></a></div></div>
+            <div><div class="ci-lbl">Email</div><div class="ci-val"><a href="mailto:<?=htmlspecialchars($__ce)?>" class="ci-link"><?=htmlspecialchars($__ce)?></a></div></div>
           </div>
           <?php endif; ?>
           <?php if ($__cp || $__cw): $__tel = $__cp ?: $__cw; ?>
           <div class="ci-item">
             <div class="ci-ico"><i class="fa-solid fa-phone"></i></div>
             <div><div class="ci-lbl">Phone<?= $__cw ? ' / WhatsApp' : '' ?></div><div class="ci-val">
-              <?php if ($__cw): ?><a href="https://wa.me/<?=preg_replace('/[^0-9]/','',$__cw)?>" class="sec-eye"><?=htmlspecialchars($__tel)?></a>
-              <?php else: ?><a href="tel:<?=htmlspecialchars($__cp)?>" class="sec-eye"><?=htmlspecialchars($__cp)?></a><?php endif; ?>
+              <?php if ($__cw): ?><a href="https://wa.me/<?=preg_replace('/[^0-9]/','',$__cw)?>" class="ci-link"><?=htmlspecialchars($__tel)?></a>
+              <?php else: ?><a href="tel:<?=htmlspecialchars($__cp)?>" class="ci-link"><?=htmlspecialchars($__cp)?></a><?php endif; ?>
             </div></div>
           </div>
           <?php endif; ?>
@@ -1104,6 +1143,85 @@ textarea.fc{resize:vertical;min-height:88px}
   </div>
 </footer>
 
+<!-- ═══════════════════════════════════ MOBILE OVERLAY ══════════════════════ -->
+<div class="mob-overlay" id="mobOverlay" role="dialog" aria-modal="true" aria-label="Navigation menu">
+  <div class="mob-ov-inner">
+
+    <!-- Close button -->
+    <div class="mob-ov-topbar">
+      <button class="mob-ov-close" id="mobClose" aria-label="Close menu">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Menu label -->
+    <div class="mob-ov-label">Menu</div>
+
+    <!-- Nav links with icons -->
+    <nav class="mob-ov-nav">
+      <a href="#home" class="mob-ov-link">
+        <span class="mob-ov-icon"><i class="fa-solid fa-house"></i></span> Home
+      </a>
+      <a href="#features" class="mob-ov-link">
+        <span class="mob-ov-icon"><i class="fa-solid fa-layer-group"></i></span> Features
+      </a>
+      <a href="#about" class="mob-ov-link">
+        <span class="mob-ov-icon"><i class="fa-solid fa-circle-info"></i></span> About Us
+      </a>
+      <a href="#how" class="mob-ov-link">
+        <span class="mob-ov-icon"><i class="fa-solid fa-gears"></i></span> How it Works
+      </a>
+      <a href="#demo" class="mob-ov-link">
+        <span class="mob-ov-icon"><i class="fa-solid fa-calendar-check"></i></span> Book Demo
+      </a>
+      <a href="#contact" class="mob-ov-link">
+        <span class="mob-ov-icon"><i class="fa-solid fa-paper-plane"></i></span> Contact
+      </a>
+    </nav>
+
+    <!-- Divider -->
+    <div class="mob-ov-divider"></div>
+
+    <!-- Get Started CTA -->
+    <a href="#demo" class="mob-ov-cta">
+      <i class="fa-solid fa-rocket"></i> Get Started Free
+    </a>
+
+    <!-- Bottom: legal + social -->
+    <div class="mob-ov-bottom">
+      <div class="mob-ov-secondary">
+        <a href="#">Privacy Policy</a>
+        <a href="#">Terms of Service</a>
+      </div>
+      <?php
+      $__mobSocials = [
+        ['social_facebook',  'fa-brands fa-facebook-f'],
+        ['social_twitter',   'fa-brands fa-x-twitter'],
+        ['social_instagram', 'fa-brands fa-instagram'],
+        ['social_whatsapp',  'fa-brands fa-whatsapp'],
+        ['social_linkedin',  'fa-brands fa-linkedin-in'],
+      ];
+      $__hasSocial = array_filter($__mobSocials, fn($s) => !empty($__gs[$s[0]]));
+      if ($__hasSocial): ?>
+      <div class="mob-ov-socials">
+        <?php foreach ($__mobSocials as [$__sk, $__si]):
+          if (empty($__gs[$__sk])) continue; ?>
+        <a href="<?= htmlspecialchars($__gs[$__sk]) ?>" class="mob-ov-soc" target="_blank" rel="noopener noreferrer">
+          <i class="<?= $__si ?>"></i>
+        </a>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ BACK TO TOP ══════════════════════════ -->
+<button class="back-to-top" id="backToTop" aria-label="Back to top">
+  <i class="fa-solid fa-arrow-up"></i>
+</button>
+
 <!-- ═══════════════════════════════════ SCRIPTS ══════════════════════════════ -->
 <script>
 (function () {
@@ -1113,21 +1231,30 @@ textarea.fc{resize:vertical;min-height:88px}
     nav.classList.toggle('scrolled', window.scrollY > 30);
   }, { passive: true });
 
-  /* Mobile hamburger */
-  document.getElementById('navHam').addEventListener('click', function () {
-    const nl = document.getElementById('navLinks');
-    nl.classList.toggle('open');
-    this.innerHTML = nl.classList.contains('open')
-      ? '<i class="fa-solid fa-xmark"></i>'
-      : '<i class="fa-solid fa-bars"></i>';
+  /* Mobile overlay menu */
+  const mobOverlay = document.getElementById('mobOverlay');
+  const mobClose   = document.getElementById('mobClose');
+
+  function openMobMenu() {
+    mobOverlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeMobMenu() {
+    mobOverlay.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  document.getElementById('navHam').addEventListener('click', openMobMenu);
+  mobClose.addEventListener('click', closeMobMenu);
+
+  /* Close on any overlay nav link or CTA click */
+  document.querySelectorAll('.mob-ov-link, .mob-ov-cta').forEach(a => {
+    a.addEventListener('click', closeMobMenu);
   });
 
-  /* Close mobile nav on link click */
-  document.querySelectorAll('#navLinks a').forEach(a => {
-    a.addEventListener('click', () => {
-      document.getElementById('navLinks').classList.remove('open');
-      document.getElementById('navHam').innerHTML = '<i class="fa-solid fa-bars"></i>';
-    });
+  /* Close on Escape key */
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && mobOverlay.classList.contains('open')) closeMobMenu();
   });
 
   /* Scroll reveal */
@@ -1166,6 +1293,13 @@ textarea.fc{resize:vertical;min-height:88px}
       a.style.background = a.getAttribute('href') === '#' + cur ? 'rgba(255,255,255,.1)' : '';
     });
   }, { passive: true });
+
+  /* Back to top */
+  const btt = document.getElementById('backToTop');
+  window.addEventListener('scroll', () => {
+    btt.classList.toggle('visible', window.scrollY > 380);
+  }, { passive: true });
+  btt.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
 
   /* Counter animation on stats */
   const counters = document.querySelectorAll('.stat-num');
