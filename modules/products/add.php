@@ -240,8 +240,6 @@ include __DIR__ . '/../../app/includes/sidebar.php';
                 </div>
             </div>
         </div>
-    </div>
-
 </div>
 
 <div class="flex gap-3 mt-6">

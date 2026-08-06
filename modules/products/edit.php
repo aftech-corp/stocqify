@@ -93,72 +93,72 @@ include __DIR__ . '/../../app/includes/sidebar.php';
 
 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
     <form method="POST">
-                    <input type="hidden" name="csrf_token" value="<?= h(csrfToken()) ?>">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="md:col-span-2">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
-                            <input type="text" name="name" value="<?= h($f['name'] ?? '') ?>" required
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">SKU</label>
-                            <input type="text" name="sku" value="<?= h($f['sku'] ?? '') ?>"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                            <select name="category_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                                <option value="">-- None --</option>
-                                <?php foreach ($categories as $cat): ?>
-                                <option value="<?= $cat['id'] ?>" <?= ($f['category_id']??'')==$cat['id']?'selected':'' ?>><?= h($cat['name']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Unit</label>
-                            <select name="unit" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                                <?php foreach (['piece','bag','bottle','can','box','pack','tin','kg','litre','carton','dozen','pair'] as $u): ?>
-                                <option value="<?= $u ?>" <?= ($f['unit']??'piece')===$u?'selected':'' ?>><?= ucfirst($u) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Cost Price (<?= currencySymbol() ?>)</label>
-                            <input type="number" name="cost_price" value="<?= h($f['cost_price'] ?? '0') ?>" min="0" step="0.01"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Selling Price (<?= currencySymbol() ?>) *</label>
-                            <input type="number" name="selling_price" value="<?= h($f['selling_price'] ?? '0') ?>" min="0" step="0.01" required
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Reorder Level</label>
-                            <input type="number" name="reorder_level" value="<?= h($f['reorder_level'] ?? '5') ?>" min="0" step="0.01"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Max Stock</label>
-                            <input type="number" name="max_stock" value="<?= h($f['max_stock'] ?? '') ?>" min="0" step="0.01"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                        </div>
-                        <div class="md:col-span-2">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                            <textarea name="description" rows="2"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"><?= h($f['description'] ?? '') ?></textarea>
-                        </div>
-                    </div>
-                    <div class="mt-3 p-3 bg-amber-50 rounded-lg text-sm text-amber-700">
-                        <i class="fa-solid fa-info-circle mr-1"></i>
-                        Current Stock: <strong><?= number_format($product['stock_quantity'], 2) ?> <?= h($product['unit']) ?></strong>.
-                        Use <a href="adjust.php?id=<?= $id ?>" class="underline">Stock Adjustment</a> to update quantity.
-                    </div>
-                    <div class="flex gap-3 mt-6">
-                        <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
-                            <i class="fa-solid fa-save mr-1"></i> Update Product
-                        </button>
-                        <a href="index.php" class="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg text-sm font-medium hover:bg-gray-200">Cancel</a>
-                    </div>
+        <input type="hidden" name="csrf_token" value="<?= h(csrfToken()) ?>">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
+                <input type="text" name="name" value="<?= h($f['name'] ?? '') ?>" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">SKU</label>
+                <input type="text" name="sku" value="<?= h($f['sku'] ?? '') ?>"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <select name="category_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="">-- None --</option>
+                    <?php foreach ($categories as $cat): ?>
+                    <option value="<?= $cat['id'] ?>" <?= ($f['category_id']??'')==$cat['id']?'selected':'' ?>><?= h($cat['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                <select name="unit" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    <?php foreach (['piece','bag','bottle','can','box','pack','tin','kg','litre','carton','dozen','pair'] as $u): ?>
+                    <option value="<?= $u ?>" <?= ($f['unit']??'piece')===$u?'selected':'' ?>><?= ucfirst($u) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Cost Price (<?= currencySymbol() ?>)</label>
+                <input type="number" name="cost_price" value="<?= h($f['cost_price'] ?? '0') ?>" min="0" step="0.01"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Selling Price (<?= currencySymbol() ?>) *</label>
+                <input type="number" name="selling_price" value="<?= h($f['selling_price'] ?? '0') ?>" min="0" step="0.01" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Reorder Level</label>
+                <input type="number" name="reorder_level" value="<?= h($f['reorder_level'] ?? '5') ?>" min="0" step="0.01"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Max Stock</label>
+                <input type="number" name="max_stock" value="<?= h($f['max_stock'] ?? '') ?>" min="0" step="0.01"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea name="description" rows="2"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"><?= h($f['description'] ?? '') ?></textarea>
+            </div>
+        </div>
+        <div class="mt-3 p-3 bg-amber-50 rounded-lg text-sm text-amber-700">
+            <i class="fa-solid fa-info-circle mr-1"></i>
+            Current Stock: <strong><?= number_format($product['stock_quantity'], 2) ?> <?= h($product['unit']) ?></strong>.
+            Use <a href="adjust.php?id=<?= $id ?>" class="underline">Stock Adjustment</a> to update quantity.
+        </div>
+        <div class="flex gap-3 mt-6">
+            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
+                <i class="fa-solid fa-save mr-1"></i> Update Product
+            </button>
+            <a href="index.php" class="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg text-sm font-medium hover:bg-gray-200">Cancel</a>
+        </div>
     </form>
 </div>
 
