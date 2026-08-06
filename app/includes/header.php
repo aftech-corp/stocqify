@@ -2,7 +2,7 @@
 // Compute <base> href so relative links within module pages resolve via clean URLs
 $__self = $_SERVER['PHP_SELF'];
 if (preg_match('|/modules/([^/]+)/|', $__self, $__m)) {
-    $__seg = $__m[1] === 'service_orders' ? 'service-orders' : $__m[1];
+    $__seg = $__m[1] === 'service_orders' ? 'service-orders' : ($__m[1] === 'bulk' ? 'import' : $__m[1]);
     $__baseHref = SITE_URL . '/' . $__seg . '/';
 } else {
     $__baseHref = SITE_URL . '/';

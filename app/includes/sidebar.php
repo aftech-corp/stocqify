@@ -661,9 +661,6 @@ function navGroup(string $id, string $icon, string $label, string $color, string
         ?>
         <?php endif; ?>
 
-        <!-- Import Data -->
-        <?= sidebarLink(url('import'), 'fa-file-arrow-up', 'Import Data', $currentPath, 'import') ?>
-
         <!-- ANALYTICS group (both types, service businesses get service-specific reports) -->
         <?php if (hasPermission('reports')): ?>
         <?php
@@ -697,6 +694,7 @@ function navGroup(string $id, string $icon, string $label, string $color, string
         <?php
         $adminContent = sidebarLink(url('admin/users'), 'fa-user-shield', 'Users', $currentPath, 'admin/users');
         if (!isAdmin()) $adminContent .= featureNavLink('branches_management', $__bizFeatures, url('branches'), 'fa-code-branch', 'Branches', $currentPath, 'branches');
+        $adminContent .= sidebarLink(url('import'), 'fa-file-arrow-up', 'Import Data', $currentPath, 'import');
         if (isAdmin()) $adminContent .= sidebarLink(url('admin/businesses'),   'fa-building',   'Businesses',      $currentPath, 'admin/businesses');
         if (isAdmin()) $adminContent .= sidebarLink(url('admin/subscriptions'),'fa-credit-card','Subscriptions',   $currentPath, 'subscriptions');
         if (isAdmin()) $adminContent .= sidebarLink(url('admin/settings'),     'fa-sliders',    'Settings',        $currentPath, 'admin/settings');

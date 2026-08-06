@@ -12,7 +12,7 @@ if (!$id) { flash('error', 'Invalid ticket.'); redirect(url('support')); }
 
 // Load ticket — scope to own business unless admin
 if (isAdmin()) {
-    $stmt = $db->prepare("SELECT t.*, u.name AS submitter_name, b.name AS biz_name
+    $stmt = $db->prepare("SELECT t.*, COALESCE(u.name, u.email, 'Unknown') AS submitter_name, b.name AS biz_name
         FROM support_tickets t
         LEFT JOIN users u ON u.id = t.user_id
         LEFT JOIN businesses b ON b.id = t.business_id
@@ -21,14 +21,14 @@ if (isAdmin()) {
 } else {
     $bizId = currentBusinessId();
     if ($bizId) {
-        $stmt = $db->prepare("SELECT t.*, u.name AS submitter_name, b.name AS biz_name
+        $stmt = $db->prepare("SELECT t.*, COALESCE(u.name, u.email, 'Unknown') AS submitter_name, b.name AS biz_name
             FROM support_tickets t
             LEFT JOIN users u ON u.id = t.user_id
             LEFT JOIN businesses b ON b.id = t.business_id
             WHERE t.id=? AND t.business_id=?");
         $stmt->execute([$id, $bizId]);
     } else {
-        $stmt = $db->prepare("SELECT t.*, u.name AS submitter_name, b.name AS biz_name
+        $stmt = $db->prepare("SELECT t.*, COALESCE(u.name, u.email, 'Unknown') AS submitter_name, b.name AS biz_name
             FROM support_tickets t
             LEFT JOIN users u ON u.id = t.user_id
             LEFT JOIN businesses b ON b.id = t.business_id
