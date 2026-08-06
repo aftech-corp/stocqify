@@ -125,13 +125,10 @@ include __DIR__ . '/../../app/includes/sidebar.php';
 </div>
 <?php endif; ?>
 
-<form method="POST" enctype="multipart/form-data">
+<form method="POST">
 <input type="hidden" name="csrf_token" value="<?= h(csrfToken()) ?>">
 
-<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-
-    <!-- Product details -->
-    <div class="lg:col-span-3 space-y-4">
+<div class="space-y-4">
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 class="font-semibold text-gray-700 mb-4">Product Details</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -245,12 +242,6 @@ include __DIR__ . '/../../app/includes/sidebar.php';
         </div>
     </div>
 
-    <!-- Image upload -->
-    <div class="lg:col-span-1">
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-            <?= renderImageUploader('prod', 'image', 'Product Image <span class="text-gray-400 text-xs font-normal">(optional)</span>', '', '', '220px') ?>
-        </div>
-    </div>
 </div>
 
 <div class="flex gap-3 mt-6">
@@ -286,5 +277,4 @@ include __DIR__ . '/../../app/includes/sidebar.php';
 })();
 </script>
 
-<?php imageUploaderAssets(); ?>
 <?php include __DIR__ . '/../../app/includes/footer.php'; ?>

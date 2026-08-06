@@ -123,6 +123,10 @@ RewriteRule ^suppliers/view/?$ modules/suppliers/view.php [L,QSA]
 RewriteRule ^suppliers/purchase/?$ modules/suppliers/purchase.php [L,QSA]
 RewriteRule ^suppliers/pay/?$ modules/suppliers/pay.php [L,QSA]
 
+# Import / Bulk Upload
+RewriteRule ^import/?$ modules/bulk/upload.php [L,QSA]
+RewriteRule ^import/([a-z_]+\.php)$ modules/bulk/$1 [L,QSA]
+
 # Branches
 RewriteRule ^branches/?$        modules/branches/index.php  [L,QSA]
 RewriteRule ^branches/add/?$    modules/branches/add.php    [L,QSA]

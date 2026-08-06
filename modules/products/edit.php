@@ -81,37 +81,18 @@ include __DIR__ . '/../../app/includes/header.php';
 include __DIR__ . '/../../app/includes/sidebar.php';
 ?>
 
-<div class="max-w-3xl mx-auto">
-    <div class="flex items-center gap-3 mb-6">
-        <a href="index.php" class="text-gray-500 hover:text-gray-700"><i class="fa-solid fa-arrow-left"></i></a>
-        <h2 class="text-xl font-bold text-gray-800">Edit Product: <?= h($product['name']) ?></h2>
-    </div>
-    <?php if ($errors): ?>
-    <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-        <?php foreach ($errors as $e): ?><p class="text-red-700 text-sm"><?= h($e) ?></p><?php endforeach; ?>
-    </div>
-    <?php endif; ?>
+<div class="flex items-center gap-3 mb-6">
+    <a href="index.php" class="text-gray-500 hover:text-gray-700"><i class="fa-solid fa-arrow-left"></i></a>
+    <h2 class="text-xl font-bold text-gray-800">Edit Product: <?= h($product['name']) ?></h2>
+</div>
+<?php if ($errors): ?>
+<div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+    <?php foreach ($errors as $e): ?><p class="text-red-700 text-sm"><?= h($e) ?></p><?php endforeach; ?>
+</div>
+<?php endif; ?>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        <!-- Image uploader -->
-        <div class="lg:col-span-1 order-first lg:order-last">
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-                <?= renderImageUploader(
-                    'prod',
-                    'image',
-                    'Product Image <span class="text-gray-400 text-xs font-normal">(optional)</span>',
-                    $existingImgUrl,
-                    'remove_image',
-                    '220px'
-                ) ?>
-            </div>
-        </div>
-
-        <!-- Product details -->
-        <div class="lg:col-span-2">
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <form method="POST" enctype="multipart/form-data">
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <form method="POST">
                     <input type="hidden" name="csrf_token" value="<?= h(csrfToken()) ?>">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="md:col-span-2">
@@ -178,11 +159,7 @@ include __DIR__ . '/../../app/includes/sidebar.php';
                         </button>
                         <a href="index.php" class="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg text-sm font-medium hover:bg-gray-200">Cancel</a>
                     </div>
-                </form>
-            </div>
-        </div>
-    </div>
+    </form>
 </div>
 
-<?php imageUploaderAssets(); ?>
 <?php include __DIR__ . '/../../app/includes/footer.php'; ?>

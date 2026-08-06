@@ -661,6 +661,9 @@ function navGroup(string $id, string $icon, string $label, string $color, string
         ?>
         <?php endif; ?>
 
+        <!-- Import Data -->
+        <?= sidebarLink(url('import'), 'fa-file-arrow-up', 'Import Data', $currentPath, 'import') ?>
+
         <!-- ANALYTICS group (both types, service businesses get service-specific reports) -->
         <?php if (hasPermission('reports')): ?>
         <?php
@@ -806,7 +809,11 @@ function navGroup(string $id, string $icon, string $label, string $color, string
             group.classList.toggle('open', !isOpen);
         });
     });
+})();
 
+// Notification system initialises after the full page renders (bell button is in the topbar,
+// which appears after this script block in the HTML stream).
+document.addEventListener('DOMContentLoaded', function() {
     // ── Notification system ───────────────────────────────────
     const API      = '<?= APP_URL ?>';
     const CSRF_TOK = '<?= csrfToken() ?>';
@@ -971,7 +978,7 @@ function navGroup(string $id, string $icon, string $label, string $color, string
     }
 
     setInterval(poll, 15000);
-})();
+});
 </script>
 
 <!-- ═══════════════════════════════════════════════════════ -->
